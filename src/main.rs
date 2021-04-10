@@ -5,16 +5,9 @@ use std::vec;
 use ropey::Rope;
 use tree_sitter::{Language, Parser, Point, Query, QueryCursor, Tree, TreeCursor};
 
-// ropey
-// text.line_to_char || line_to_byte
-
-// -> start_idx = line_to_char(sp[0]) + sp[1]
-// -> end_id = line_to_char(ep[0] + ...)
-//
-//
-
 extern "C" {
     fn tree_sitter_typescript() -> Language;
+    fn tree_sitter_tsx() -> Language;
 }
 
 fn main() {
@@ -33,10 +26,10 @@ fn infer_langauge_from_suffix(file_name: &String) -> Language {
         .expect("Can't infer file type from file name");
 
     match suffix {
-        "ts" => Some(unsafe { tree_sitter_typescript() }),
-        _ => None,
+        "ts" => unsafe { tree_sitter_typescript() },
+        "tsx" => unsafe { tree_sitter_tsx() },
+        _ => panic!("Expected .ts file"),
     }
-    .expect("You shall not code other langs that Hypescript")
 }
 
 fn read_file(file_name: &String) -> () {
@@ -53,12 +46,6 @@ fn read_file(file_name: &String) -> () {
 
         println!("{}", text.slice(start_idx..end_idx));
     }
-    //
-    // imports.into_iter().collect
-
-    // for line in source_code.lines() {
-    //     println!("{} ", line);
-    // }
 }
 
 fn get_top_level_imports(source_code: String, language: Language) -> Vec<(Point, Point)> {
