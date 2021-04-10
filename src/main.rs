@@ -41,7 +41,9 @@ fn parse_program(source_code: String, language: Language) -> () {
     parser.set_language(language).unwrap();
 
     let tree = parser.parse(source_code, None).unwrap();
-    get_top_level_imports(tree);
+    // get_top_level_imports(tree);
+    list_imports(tree);
+    // query_magic(tree, language);
 
     // let root_node = tree.root_node();
 
@@ -83,12 +85,24 @@ fn get_top_level_imports(tree: Tree) {
     }
 }
 
-// fn walk(cursor: TreeCursor) -> () {
-//     cursor.goto_first_child();
+fn list_imports(tree: Tree) {
+    let root_node = tree.root_node();
+    let mut cursor = tree.walk();
 
-//     let mut has_next = true;
-//     loop {
-//         let n = cursor.node();
-//         mut_has_next
-//     }
-// }
+    for node in root_node
+        .children(&mut cursor)
+        .filter(|node| node.kind() == "import_statement")
+    {
+        let mut child_cursor = node.walk();
+        for child in node
+            .children(&mut child_cursor)
+            .filter(|child| child.kind() == "string" && !child.is_extra())
+        {
+            let sp = child.start_position();
+            let ep = child.end_position();
+            println!("{}", child.kind());
+            println!("{}", sp);
+            println!("{}", ep);
+        }
+    }
+}
