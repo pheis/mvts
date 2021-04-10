@@ -1,7 +1,7 @@
 use std::env;
 use std::fs;
 
-use tree_sitter::{Language, Parser, TreeCursor};
+use tree_sitter::{Language, Parser, Query, QueryCursor, Tree, TreeCursor};
 
 extern "C" {
     fn tree_sitter_typescript() -> Language;
@@ -14,25 +14,7 @@ fn main() {
         0 | 1 => println!("Gimme file"),
         _ => read_file(&args[1]),
     }
-
-    // println!("{:?}", args[1]);
-    // println!("juuh");
-
-    // let language = unsafe { tree_sitter_typescript() };
-
-    // let mut parser = Parser::new();
-    // parser.set_language(language).unwrap();
-
-    // let source_code = "console.log()";
-
-    // let tree = parser.parse(source_code, None).unwrap();
-
-    // let root_node = tree.root_node();
-
-    // println!("{}", root_node.kind());
 }
-
-// get Language from suffix
 
 fn infer_langauge_from_suffix(file_name: &String) -> Language {
     let suffix = file_name
@@ -59,20 +41,54 @@ fn parse_program(source_code: String, language: Language) -> () {
     parser.set_language(language).unwrap();
 
     let tree = parser.parse(source_code, None).unwrap();
+    get_top_level_imports(tree);
 
-    let root_node = tree.root_node();
+    // let root_node = tree.root_node();
 
-    let cursor = tree.walk();
+    // let mut cursor = tree.walk();
+    // cursor.goto_first_child();
+    // println!("{}", cursor.node().kind());
 
-    println!("{}", root_node.kind());
+    // println!("{}", root_node.kind());
+
+    // let q = Query::new(language, "(import_statement :source)").expect("lol");
+    // let mut qc = QueryCursor::new();
+    // let lol = qc.matches(&q, root_node, |node| node.kind());
+    // for item in lol {
+    //     for x in item.captures {
+    //         println!("{}", x.node.kind());
+    //     }
+    // }
 }
 
-fn walk(cursor: TreeCursor) -> () {
+fn get_top_level_imports(tree: Tree) {
+    let mut cursor = tree.walk();
     cursor.goto_first_child();
-
-    let mut has_next = true;
     loop {
-        let n = cursor.node();
-        mut_has_next
+        let node = cursor.node();
+        if node.kind() == "import_statement" {
+            for source_node in node
+                .children(&mut node.walk())
+                .filter(|child_node| child_node.kind() == "string")
+            {
+                println!("{}", source_node.child_count());
+                println!("{}", source_node.is_named());
+            }
+        }
+
+        let has_sibling = cursor.goto_next_sibling();
+        if !has_sibling {
+            break;
+        }
     }
 }
+
+// fn walk(cursor: TreeCursor) -> () {
+//     cursor.goto_first_child();
+
+//     let mut has_next = true;
+//     loop {
+//         let n = cursor.node();
+//         mut_has_next
+//     }
+// }
