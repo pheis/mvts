@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 tree-sitter = "0.19.3"
 ropey = "1.2.0"
+glob = "0.3"
 
 [build-dependencies]
 cc = "*"
