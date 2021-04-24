@@ -15,19 +15,19 @@ pub enum Lang {
 impl From<Lang> for Language {
     fn from(lang: Lang) -> Self {
         match lang {
-            Ts => unsafe { tree_sitter_typescript() },
-            Tsx => unsafe { tree_sitter_typescript() },
+            Lang::Ts => unsafe { tree_sitter_typescript() },
+            Lang::Tsx => unsafe { tree_sitter_tsx() },
         }
     }
 }
 
-fn get_tree(source_code: String, language: Language) -> Tree {
+fn get_tree(source_code: &String, language: Language) -> Tree {
     let mut parser = Parser::new();
     parser.set_language(language).unwrap();
     parser.parse(source_code, None).unwrap()
 }
 
-pub fn query_imports(source_code: String, lang: Lang) -> Result<Vec<(Point, Point)>, Fault> {
+pub fn query_imports(source_code: &String, lang: Lang) -> Result<Vec<(Point, Point)>, Fault> {
     let language = lang.into();
 
     let tree = get_tree(source_code, language);
@@ -51,4 +51,3 @@ pub fn query_imports(source_code: String, lang: Lang) -> Result<Vec<(Point, Poin
     }
     Ok(imports)
 }
-pub fn lol_wut() -> Result<Vec<usize, usize, String>, Fault> {}

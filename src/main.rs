@@ -4,18 +4,12 @@ use std::path::{Component, Path, PathBuf};
 use std::vec;
 
 use ropey::Rope;
-use tree_sitter::{Language, Parser, Tree};
 
 mod fault;
 mod query;
 
 use crate::fault::Fault;
-use crate::query::query_imports;
-
-extern "C" {
-    fn tree_sitter_typescript() -> Language;
-    fn tree_sitter_tsx() -> Language;
-}
+use crate::query::{query_imports, Lang};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -26,137 +20,91 @@ fn main() {
     }
 }
 
-fn infer_langauge_from_suffix(file_name: &String) -> Language {
+fn infer_langauge_from_suffix(file_name: &String) -> Lang {
     let suffix = file_name
         .split('.')
         .last()
         .expect("Can't infer file type from file name");
 
     match suffix {
-        "ts" => unsafe { tree_sitter_typescript() },
-        "tsx" => unsafe { tree_sitter_tsx() },
-        _ => panic!("Expected .ts file"),
+        "ts" => Lang::Ts,
+        "tsx" => Lang::Tsx,
+        _ => panic!("Expected .ts or .tsx file"),
     }
+}
+
+fn get_relative_imports(
+    text: &Rope,
+    locations: &Vec<(tree_sitter::Point, tree_sitter::Point)>,
+) -> Vec<(usize, usize, String)> {
+    locations
+        .into_iter()
+        .map(|(start_point, end_point)| {
+            let start_idx = text.line_to_char(start_point.row) + start_point.column + 1;
+            let end_idx = text.line_to_char(end_point.row) + end_point.column - 1;
+            let import_string = text.slice(start_idx..end_idx).to_string();
+
+            (start_idx, end_idx, import_string)
+        })
+        .filter(|(_, _, import_string)| import_string.starts_with("."))
+        .collect()
 }
 
 fn mvts(file_name: &String, target_path: &String) -> Result<(), Fault> {
     let source_code = fs::read_to_string(file_name).expect("Unable to read file");
     let language = infer_langauge_from_suffix(&file_name);
 
-    get_file_dir(file_name);
-    let diff = diff_paths(file_name, target_path).expect("diff failure");
-
-    println!("{:?}", diff);
-
-    let imports = query_imports(source_code.clone(), language)?;
-
+    let imports = query_imports(&source_code, language)?;
     let text = Rope::from_str(&source_code);
 
-    for (start_point, end_point) in imports {
-        let start_idx = text.line_to_char(start_point.row) + start_point.column + 1;
-        let end_idx = text.line_to_char(end_point.row) + end_point.column - 1;
+    let rel_imports = get_relative_imports(&text, &imports);
 
-        let source = text.slice(start_idx..end_idx);
+    let orig_file_dir = get_file_dir(&file_name)?;
+    // let target_file_dir = get_file_dir(&target_path)?;
 
-        let source_string = source.to_string();
+    rel_imports.into_iter().for_each(|(_, _, import_string)| {
+        file_path_from_import_string(&orig_file_dir, &target_file_dir, &import_string)
+    });
 
-        if !source_string.starts_with(".") {
-            continue;
-        }
-
-        // let asdf = diff_paths(target_path, source_string.clone()).expect("oh noes we die here");
-
-        // let orig_dir = get_file_dir(file_name);
-        // let target_dir = get_file_dir(target_path);
-
-        //let pdiff = diff_paths(orig_dir, target_dir).expect("blurbs");
-        // let pdiff = diff_paths(target_dir, orig_dir).expect("blurbs");
-        // println!("pdiff: {:?}", pdiff);
-
-        // let qwer = diff_paths(source_string.clone(), pdiff).expect("oh no");
-        // let qwer = diff_paths(pdiff, source_string.clone()).expect("oh no");
-
-        let orig_dir = get_file_dir(file_name);
-
-        let current_dir = env::current_dir().expect("lol wut");
-
-        let abs_orig_dir = current_dir.join(orig_dir);
-
-        let mut tf = Path::new(&source_string).to_path_buf();
-        tf.pop();
-
-        let p = abs_orig_dir.join(tf).canonicalize();
-
-        println!("");
-        println!("original: {}", source);
-        println!("fp: {:?}", p);
-        // println!("mutated: {:?}", qwer);
-        println!("");
-    }
     Ok(())
 }
 
-fn get_file_dir(file_path: &String) -> PathBuf {
+fn get_file_dir(file_path: &String) -> Result<PathBuf, Fault> {
     let mut p = Path::new(file_path).to_path_buf();
     if p.is_file() {
         p.pop();
     }
-    p
+    let canon_path = fs::canonicalize(p)?;
+    Ok(canon_path)
 }
 
-fn get_tree(source_code: String, language: Language) -> Tree {
-    let mut parser = Parser::new();
-    parser.set_language(language).unwrap();
-    parser.parse(source_code, None).unwrap()
+fn file_path_from_import_string(
+    orig_file_dir: &PathBuf,
+    target_file_dir: &PathBuf,
+    orig_import: &String,
+) {
+    let import_strings: Vec<_> = vec![".ts", ".tsx", ".js", ".jsx"]
+        .into_iter()
+        .filter_map(|suffix| {
+            let path_string = orig_import.clone() + suffix;
+            let path = Path::new(&path_string);
+
+            let mut abs_path = orig_file_dir.clone();
+            abs_path.push(path);
+
+            fs::canonicalize(abs_path).ok()
+        })
+        .collect();
+
+    for import_string in import_strings {
+        println!("{:?}", import_string);
+        let lol = diff_paths(import_string, target_file_dir);
+        // let lol = diff_paths(target_file_dir, import_string);
+        println!("{:?}", lol);
+    }
 }
 
-// fn query_imports(source_code: String, language: Language) -> Result<Vec<(Point, Point)>, Fault> {
-//     let tree = get_tree(source_code, language);
-//     let root_node = tree.root_node();
-
-//     let query = Query::new(language, "(import_statement (string) @import)")?;
-
-//     let mut query_cursor = QueryCursor::new();
-
-//     let mut imports = vec![];
-
-//     // TODO what does callback do?
-//     for (query_matches, u) in query_cursor.captures(&query, root_node, |_| "What does this do?") {
-//         let captures = query_matches.captures;
-//         for i in 0..(u + 1) {
-//             let node = captures[i].node;
-//             let start_point = node.start_position();
-//             let end_point = node.end_position();
-//             imports.push((start_point.clone(), end_point.clone()))
-//         }
-//     }
-//     Ok(imports)
-// }
-
-// fn get_top_level_imports(source_code: String, language: Language) -> Vec<(Point, Point)> {
-//     let tree = get_tree(source_code, language);
-
-//     let root_node = tree.root_node();
-//     let mut cursor = tree.walk();
-
-//     let mut imports = vec![];
-
-//     for node in root_node
-//         .children(&mut cursor)
-//         .filter(|node| node.kind() == "import_statement")
-//     {
-//         let mut child_cursor = node.walk();
-//         for child in node
-//             .children(&mut child_cursor)
-//             .filter(|child| child.kind() == "string" && !child.is_extra())
-//         {
-//             let start_point = child.start_position();
-//             let end_point = child.end_position();
-//             imports.push((start_point.clone(), end_point.clone()))
-//         }
-//     }
-//     imports
-// }
+// fn new_import_path(orig_file_dir: Path, new_file_dir: Path, orig_import: String) { }
 
 // Copy pasted from
 // https://github.com/Manishearth/pathdiff/blob/master/src/lib.rs
