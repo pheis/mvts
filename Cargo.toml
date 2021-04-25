@@ -11,6 +11,7 @@ anyhow = "1.0"
 ropey = "1.2.0"
 structopt = "0.3"
 tree-sitter = "0.19.3"
+pathdiff = "0.2.0"
 
 [build-dependencies]
 cc = "*"
