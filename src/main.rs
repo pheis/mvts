@@ -156,37 +156,15 @@ fn update_import_string(Cli { source, target }: &Cli, import_string: &String) ->
     Ok(to_typesript_import_string(&rel_import_string))
 }
 
-// fn to_file_paths(source: &PathBuf, imports: &Imports) -> Result<Vec<PathBuf>> {
-//     imports
-//         .indices
-//         .iter()
-//         .map(|(start_idx, end_idx)| imports.text.slice(start_idx..end_idx))
-//         .map(|import| {
-//             let mut path = source.clone();
-//             path.pop();
-
-//             let abs_path = vec![".ts", ".tsx", ".js", ".jsx", ".svg"]
-//                 .into_iter()
-//                 .flat_map(|suffix| {
-//                     let mut regular_file_path = path.clone();
-//                     regular_file_path.push(import.to_string() + suffix);
-
-//                     let mut index_file_path = path.clone();
-//                     index_file_path.push(import.to_string() + "/index" + suffix);
-
-//                     vec![regular_file_path, index_file_path].into_iter()
-//                 })
-//                 .find_map(|file_path| fs::canonicalize(file_path).ok());
-
-//             abs_path.ok_or(anyhow!("Could not resolve import {}", import.to_string()))
-//         })
-//         .collect()
-// }
-
 fn to_typesript_import_string(import_string: &String) -> String {
     let re = Regex::new(r"/index\.ts|\.\w+$").unwrap();
     let import_string = re.replace_all(import_string, "");
 
     let re = Regex::new(r"^index$").unwrap();
-    re.replace_all(&import_string, ".").to_string()
+    let import_string = re.replace_all(&import_string, ".").to_string();
+
+    match import_string.starts_with(".") {
+        true => import_string,
+        false => "./".to_owned() + &import_string,
+    }
 }
