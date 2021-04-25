@@ -29,9 +29,14 @@ struct Cli {
 }
 
 fn main() -> Result<(), Error> {
-    let args = Cli::from_args();
+    let Cli { source, target } = Cli::from_args();
 
-    let (imports, text) = parse_imports(&args.source)?;
+    let imports = parse_imports(&source)?;
+    let paths = to_file_paths(&source, &imports)?;
+
+    for p in paths {
+        println!("{:?}", p);
+    }
 
     Ok(())
 }
@@ -59,7 +64,12 @@ fn parse_treesitter_tree(source_code: &String, language: Language) -> Result<Tre
         .ok_or(anyhow!("Parser failure"))
 }
 
-fn parse_imports(source_file: &PathBuf) -> Result<(Vec<(usize, usize)>, Rope)> {
+struct Imports {
+    indices: Vec<(usize, usize)>,
+    text: Rope,
+}
+
+fn parse_imports(source_file: &PathBuf) -> Result<Imports> {
     let language = infer_langauge_from_suffix(&source_file)?;
 
     let source = fs::read_to_string(source_file)
@@ -72,7 +82,7 @@ fn parse_imports(source_file: &PathBuf) -> Result<(Vec<(usize, usize)>, Rope)> {
     let mut query_cursor = QueryCursor::new();
 
     let text = Rope::from_str(&source);
-    let mut imports = vec![];
+    let mut indices = vec![];
 
     // TODO what does callback do?
     for (query_matches, u) in query_cursor.captures(&query, root, |_| "") {
@@ -87,12 +97,40 @@ fn parse_imports(source_file: &PathBuf) -> Result<(Vec<(usize, usize)>, Rope)> {
             let end_idx = text.line_to_char(end_point.row) + end_point.column - 1;
 
             if text.slice(start_idx..end_idx).to_string().starts_with(".") {
-                imports.push((start_idx, end_idx));
+                indices.push((start_idx, end_idx));
             }
         }
     }
 
-    Ok((imports, text))
+    Ok(Imports { indices, text })
+}
+
+fn to_file_paths(source: &PathBuf, imports: &Imports) -> Result<Vec<PathBuf>> {
+    imports
+        .indices
+        .iter()
+        .map(|(start_idx, end_idx)| imports.text.slice(start_idx..end_idx))
+        .map(|import| {
+            let mut path = source.clone();
+            path.pop();
+            // path.push(import.to_string());
+
+            let abs_path = vec![".ts", ".tsx", ".js", ".jsx", ".svg"]
+                .into_iter()
+                .flat_map(|suffix| {
+                    let mut regular_file_path = path.clone();
+                    regular_file_path.push(import.to_string() + suffix);
+
+                    let mut index_file_path = path.clone();
+                    index_file_path.push(import.to_string() + "/index" + suffix);
+
+                    vec![regular_file_path, index_file_path].into_iter()
+                })
+                .find_map(|file_path| fs::canonicalize(file_path).ok());
+
+            abs_path.ok_or(anyhow!("Could not resolve import {}", import.to_string()))
+        })
+        .collect()
 }
 
 //fn get_relative_imports(
