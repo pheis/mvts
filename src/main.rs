@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::BufWriter;
 use std::path::PathBuf;
 use std::vec;
 
@@ -25,13 +26,15 @@ struct Cli {
 fn main() -> Result<(), Error> {
     let Cli { source, target } = Cli::from_args();
 
-    let imports = parse_imports(&source)?;
+    let mut imports = parse_imports(&source)?;
     let paths = to_file_paths(&source, &imports)?;
 
-    let absolute_target_path = fs::canonicalize(&target)?;
+    let absolute_target_dir = get_canon_dir(&target)?;
 
-    for import_path in paths {
-        let relative_path = diff_paths(&import_path, &absolute_target_path).ok_or(anyhow!(
+    for (import_path, (start_index, end_index)) in
+        paths.into_iter().zip(imports.indices.into_iter())
+    {
+        let relative_path = diff_paths(&import_path, &absolute_target_dir).ok_or(anyhow!(
             "Cannot build relative import for {:?}",
             import_path
         ))?;
@@ -40,11 +43,41 @@ fn main() -> Result<(), Error> {
             .to_str()
             .ok_or(anyhow!("Import malformed path: {:?}", import_path))?;
 
-        let lol = path_string.to_string();
-        println!("{}", to_typesript_import_string(&lol));
+        let import_string = path_string.to_string();
+        let import_string = to_typesript_import_string(&import_string);
+
+        imports.text.remove(start_index..end_index);
+        imports.text.insert(start_index, &import_string);
     }
 
+    // move_and_replace(Cli { source, target }, imports.text)?;
+
     Ok(())
+}
+
+fn move_and_replace(Cli { target, source }: Cli, text: Rope) -> Result<()> {
+    let mut target_path = target.clone();
+
+    if target.is_dir() {
+        let file_name = source.file_name().unwrap();
+        target_path.push(file_name);
+    }
+
+    fs::rename(&source, &target_path)?;
+    text.write_to(BufWriter::new(fs::File::create(target_path)?))?;
+
+    Ok(())
+}
+
+fn get_canon_dir(path: &PathBuf) -> Result<PathBuf> {
+    match path.is_dir() {
+        true => Ok(fs::canonicalize(path)?),
+        false => {
+            let mut stem = path.clone();
+            stem.pop();
+            Ok(fs::canonicalize(stem)?)
+        }
+    }
 }
 
 fn infer_langauge_from_suffix(file_name: &PathBuf) -> Result<Language> {
