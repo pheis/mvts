@@ -11,3 +11,11 @@ This repo depends on tree-sitter-typescript repo. When cloning remember to also 
 ## Building
 
 `cargo build`
+
+## usage
+
+TSmv takes two arguments: source_file_path and target_file_path.
+
+`tsmv source_file.ts some_folder/another_folder/moved_source_file.ts`
+
+TSmv moves source file to target_file_path and edits it's imports so that they are correct in the new location.
