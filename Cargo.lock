@@ -245,6 +245,7 @@ dependencies = [
  "anyhow",
  "cc",
  "pathdiff",
+ "regex",
  "ropey",
  "structopt",
  "tree-sitter",

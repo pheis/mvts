@@ -1,9 +1,10 @@
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::PathBuf;
 use std::vec;
 
 use anyhow::{anyhow, Context, Error, Result};
 use pathdiff::diff_paths;
+use regex::Regex;
 use ropey::Rope;
 use structopt::StructOpt;
 use tree_sitter::{Language, Parser, Query, QueryCursor, Tree};
@@ -27,10 +28,20 @@ fn main() -> Result<(), Error> {
     let imports = parse_imports(&source)?;
     let paths = to_file_paths(&source, &imports)?;
 
-    for p in paths {
-        let full_path = fs::canonicalize(&target)?;
-        let np = diff_paths(&p, &&full_path);
-        println!("{:?}", np);
+    let absolute_target_path = fs::canonicalize(&target)?;
+
+    for import_path in paths {
+        let relative_path = diff_paths(&import_path, &absolute_target_path).ok_or(anyhow!(
+            "Cannot build relative import for {:?}",
+            import_path
+        ))?;
+
+        let path_string = relative_path
+            .to_str()
+            .ok_or(anyhow!("Import malformed path: {:?}", import_path))?;
+
+        let lol = path_string.to_string();
+        println!("{}", to_typesript_import_string(&lol));
     }
 
     Ok(())
@@ -125,4 +136,12 @@ fn to_file_paths(source: &PathBuf, imports: &Imports) -> Result<Vec<PathBuf>> {
             abs_path.ok_or(anyhow!("Could not resolve import {}", import.to_string()))
         })
         .collect()
+}
+
+fn to_typesript_import_string(import_string: &String) -> String {
+    let re = Regex::new(r"/index\.ts|\.\w+$").unwrap();
+    let import_string = re.replace_all(import_string, "");
+
+    let re = Regex::new(r"^index$").unwrap();
+    re.replace_all(&import_string, ".").to_string()
 }
