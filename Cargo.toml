@@ -17,6 +17,4 @@ regex = "1"
 ropey = "1.2.0"
 structopt = "0.3"
 tree-sitter = "0.19.3"
-
-[build-dependencies]
-cc = "*"
+tree-sitter-typescript = "0.19"

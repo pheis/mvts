@@ -10,10 +10,7 @@ use ropey::Rope;
 use structopt::StructOpt;
 use tree_sitter::{Language, Parser, Query, QueryCursor, Tree};
 
-extern "C" {
-    fn tree_sitter_typescript() -> Language;
-    fn tree_sitter_tsx() -> Language;
-}
+use tree_sitter_typescript::{language_tsx, language_typescript};
 
 #[derive(StructOpt)]
 struct Cli {
@@ -65,8 +62,8 @@ fn infer_langauge_from_suffix(file_name: &PathBuf) -> Result<Language> {
         .ok_or(Error::msg("Missing suffix on file"))?;
 
     match suffix {
-        "ts" => Ok(unsafe { tree_sitter_typescript() }),
-        "tsx" => Ok(unsafe { tree_sitter_tsx() }),
+        "ts" => Ok(language_typescript()),
+        "tsx" => Ok(language_tsx()),
         suffix => Err(anyhow!("{:?} files are not supported", suffix)),
     }
 }

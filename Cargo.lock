@@ -103,12 +103,12 @@ name = "mvts"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "cc",
  "pathdiff",
  "regex",
  "ropey",
  "structopt",
  "tree-sitter",
+ "tree-sitter-typescript",
 ]
 
 [[package]]
@@ -249,6 +249,16 @@ checksum = "1f41201fed3db3b520405a9c01c61773a250d4c3f43e9861c14b2bb232c981ab"
 dependencies = [
  "cc",
  "regex",
+]
+
+[[package]]
+name = "tree-sitter-typescript"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3f62d49c6e56bf291c412ee5e178ea14dff40f14a5f01a8847933f56d65bf3b"
+dependencies = [
+ "cc",
+ "tree-sitter",
 ]
 
 [[package]]
