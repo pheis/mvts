@@ -6,6 +6,7 @@ license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/pheis/mvts"
 repository = "https://github.com/pheis/mvts"
+description = "tool for moving typescript files"
 keywords = ["cli"]
 categories = ["command-line-utilities"]
 edition = "2018"
