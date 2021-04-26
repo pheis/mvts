@@ -9,11 +9,11 @@ use regex::Regex;
 use ropey::Rope;
 use structopt::StructOpt;
 use tree_sitter::{Language, Parser, Query, QueryCursor, Tree};
-
 use tree_sitter_typescript::{language_tsx, language_typescript};
+use walkdir::{DirEntry, WalkDir};
 
 #[derive(StructOpt)]
-struct Cli {
+struct Args {
     #[structopt(parse(from_os_str))]
     source: std::path::PathBuf,
     #[structopt(parse(from_os_str))]
@@ -21,16 +21,17 @@ struct Cli {
 }
 
 fn main() -> Result<(), Error> {
-    let args = Cli::from_args();
+    let args = Args::from_args();
 
     let text = update_imports(&args)?;
 
-    move_and_replace(&args, text)?;
+    // move_and_replace(&args, text)?;
+    find_references(&args)?;
 
     Ok(())
 }
 
-fn move_and_replace(Cli { target, source }: &Cli, text: Rope) -> Result<()> {
+fn move_and_replace(Args { target, source }: &Args, text: Rope) -> Result<()> {
     let mut target_path = target.clone();
 
     if target.is_dir() {
@@ -53,6 +54,51 @@ fn get_canon_dir(path: &PathBuf) -> Result<PathBuf> {
             Ok(fs::canonicalize(stem)?)
         }
     }
+}
+
+fn filter_file(entry: &DirEntry) -> bool {
+    entry
+        .file_name()
+        .to_str()
+        .map(|s| {
+            let is_hidden_file = !s.eq(".") && s.starts_with(".");
+            let is_node_module = s.eq("node_modules");
+            !is_hidden_file & !is_node_module
+        })
+        .unwrap_or(false)
+}
+
+fn find_references(args: &Args) -> Result<()> {
+    let canon_source_path = fs::canonicalize(&args.source)?;
+
+    let walker = WalkDir::new(".")
+        .into_iter()
+        .filter_entry(|e| filter_file(e))
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .map(|s| s.ends_with(".ts") || s.ends_with(".tsx"))
+                .unwrap_or(false)
+        })
+        .filter(|entry| {
+            fs::canonicalize(entry.path())
+                .map_err(|_| anyhow!("no canon for you"))
+                .and_then(|canon_path| sniff_ref_for_file(&canon_source_path, &canon_path))
+                .unwrap_or(false)
+        });
+
+    for entry in walker {
+        println!("{}", entry.path().display());
+    }
+
+    Ok(())
+}
+
+fn sniff_ref_for_file(source: &PathBuf, path: &PathBuf) -> Result<bool> {
+    let import_string = get_ts_import(&source, &path)?;
+    let content = fs::read_to_string(path)?;
+    Ok(content.contains(&import_string))
 }
 
 fn infer_langauge_from_suffix(file_name: &PathBuf) -> Result<Language> {
@@ -78,7 +124,7 @@ fn parse_treesitter_tree(source_code: &String, language: Language) -> Result<Tre
         .ok_or(anyhow!("Parser failure"))
 }
 
-fn update_imports(args: &Cli) -> Result<Rope> {
+fn update_imports(args: &Args) -> Result<Rope> {
     let language = infer_langauge_from_suffix(&args.source)?;
 
     let source = fs::read_to_string(&args.source)
@@ -120,7 +166,7 @@ fn update_imports(args: &Cli) -> Result<Rope> {
     Ok(text)
 }
 
-fn update_import_string(Cli { source, target }: &Cli, import_string: &String) -> Result<String> {
+fn update_import_string(Args { source, target }: &Args, import_string: &String) -> Result<String> {
     let mut source_dir =
         fs::canonicalize(source).with_context(|| format!("can't find source {:?}", source))?;
     source_dir.pop();
@@ -164,4 +210,18 @@ fn to_typesript_import_string(import_string: &String) -> String {
         true => import_string,
         false => "./".to_owned() + &import_string,
     }
+}
+
+fn get_ts_import(from_file: &PathBuf, into_file: &PathBuf) -> Result<String> {
+    let mut into_dir = into_file.clone();
+    into_dir.pop();
+
+    diff_paths(from_file, into_dir)
+        .and_then(|p| p.to_str().map(|s| s.to_string()))
+        .map(|s| to_typesript_import_string(&s))
+        .ok_or(anyhow!(
+            "Failed to get ts import {:?} {:?}",
+            from_file,
+            into_file,
+        ))
 }
