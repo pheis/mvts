@@ -2,7 +2,7 @@
 name = "mvts"
 version = "0.1.0"
 authors = ["Pyry Heiskanen <pyry.heiskanen@iki.fi>"]
-lisence = "MIT"
+license = "MIT"
 readme = "README.md"
 homepage = "https://github.com/pheis/mvts"
 repository = "https://github.com/pheis/mvts"
