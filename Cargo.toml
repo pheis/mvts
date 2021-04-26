@@ -1,11 +1,11 @@
 [package]
-name = "tsmv"
+name = "mvts"
 version = "0.1.0"
 authors = ["Pyry Heiskanen <pyry.heiskanen@iki.fi>"]
 lisence = "MIT"
 readme = "README.md"
-homepage = "https://github.com/pheis/tsmv"
-repository = "https://github.com/pheis/tsmv"
+homepage = "https://github.com/pheis/mvts"
+repository = "https://github.com/pheis/mvts"
 keywords = ["cli"]
 categories = ["command-line-utilities"]
 edition = "2018"
