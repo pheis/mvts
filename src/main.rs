@@ -1,12 +1,11 @@
-use std::fs;
-use std::io::BufWriter;
-use std::path::PathBuf;
-use std::vec;
-
 use anyhow::{anyhow, Context, Error, Result};
 use pathdiff::diff_paths;
 use regex::Regex;
 use ropey::Rope;
+use std::fs;
+use std::io::BufWriter;
+use std::path::PathBuf;
+use std::vec;
 use structopt::StructOpt;
 use tree_sitter::{Language, Parser, Query, QueryCursor, Tree};
 use tree_sitter_typescript::{language_tsx, language_typescript};
@@ -224,4 +223,87 @@ fn get_ts_import(from_file: &PathBuf, into_file: &PathBuf) -> Result<String> {
             from_file,
             into_file,
         ))
+}
+
+fn to_nodejs_import(rel_path: &PathBuf) -> Result<String> {
+    let import_string = rel_path.to_str().ok_or(anyhow!("Non utf-8 path"))?;
+
+    let re = Regex::new(r"/index\.ts|\.\w+$").unwrap();
+    let import_string = re.replace_all(import_string, "");
+
+    let re = Regex::new(r"^index$").unwrap();
+    let import_string = re.replace_all(&import_string, ".").to_string();
+
+    Ok(match import_string.starts_with(".") {
+        true => import_string,
+        false => "./".to_owned() + &import_string,
+    })
+}
+
+fn get_nodejs_imports_from_paths(file: &PathBuf, required_file: &PathBuf) -> Result<String> {
+    let mut file_dir = file.clone();
+    file_dir.pop();
+
+    let rel_path = diff_paths(required_file, file_dir).ok_or(anyhow!(
+        "failed to diff paths from {:?} to {:?}",
+        file,
+        required_file
+    ))?;
+
+    to_nodejs_import(&rel_path)
+}
+
+// fn strip_middle_relative_parts(path: &mut PathBuf) {
+//     path.components()
+// }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    macro_rules! nodejs_import_tests {
+        ($($name:ident: $value:expr,)*) => {
+        $(
+            #[test]
+            fn $name() {
+                let (path, expected) = $value;
+                let path: PathBuf = path.into();
+                let result = super::to_nodejs_import(&path).unwrap();
+                assert_eq!(expected, result);
+            }
+        )*
+        }
+    }
+
+    nodejs_import_tests! {
+        node_js_import_0: ("index.ts", "."),
+        node_js_import_1: ("index.js", "."),
+        node_js_import_3: ("index.jsx", "."),
+        node_js_import_4: ("index.tsx", "."),
+        node_js_import_5: ("juuh/elikkas/index.ts", "./juuh/elikkas"),
+        node_js_import_6: ("juuh/elikkas/joo.tsx", "./juuh/elikkas/joo"),
+    }
+
+    macro_rules! gets_import_from_paths_tests {
+        ($($name:ident: $value:expr,)*) => {
+        $(
+            #[test]
+            fn $name() {
+                let (path, required_file, expected) = $value;
+                let path: PathBuf = path.into();
+                let required_file: PathBuf = required_file.into();
+
+                let result = super::get_nodejs_imports_from_paths(&path, &required_file).unwrap();
+                assert_eq!(expected, result);
+            }
+        )*
+        }
+    }
+
+    gets_import_from_paths_tests! {
+        gets_import_from_path_0: ("src/views/some/Juuh.tsx", "src/store/index.ts", "../../store"),
+        gets_import_from_path_1: ("some/index.ts", "other/no/common", "../other/no/common"),
+        gets_import_from_path_2: ("index.ts", "deeper/in/path", "./deeper/in/path"),
+        gets_import_from_path_3: ("lol.ts", "index.ts", "."),
+    }
 }
