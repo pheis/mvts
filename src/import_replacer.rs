@@ -80,11 +80,13 @@ fn parse_treesitter_tree(source_code: &String, language: Language) -> Result<Tre
 
 #[cfg(test)]
 mod tests {
-
     #[test]
     fn it_works() {
         let source = r#"
             import some from '../../some';
+            function main() {
+                const other = require('./other');
+            }
             "#
         .into();
 
