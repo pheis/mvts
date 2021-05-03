@@ -148,7 +148,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn it_updates_imports() -> Result<()> {
+    fn it_updates_imports_0() -> Result<()> {
         let code: String = r#"
             import some from '../../some';
             import some from '../../other';
@@ -165,6 +165,30 @@ mod tests {
 
         let new_import_0: String = "import some from '../../../some';".into();
         let new_import_1: String = "import some from '../../../other';".into();
+
+        assert!(new_source_code.contains(&new_import_0));
+        assert!(new_source_code.contains(&new_import_1));
+        Ok(())
+    }
+
+    #[test]
+    fn it_updates_imports_1() -> Result<()> {
+        let code: String = r#"
+            import some from '../../some';
+            import some from '../../other';
+            function main() {
+                console.log("hullo world");
+            }
+            "#
+        .into();
+
+        let source: PathBuf = "/src/a/b/c/d/source.ts".into();
+        let target: PathBuf = "/src/a/target.ts".into();
+
+        let new_source_code = super::update_imports(code, &source, &target)?;
+
+        let new_import_0: String = "import some from './b/some';".into();
+        let new_import_1: String = "import some from './b/other';".into();
 
         assert!(new_source_code.contains(&new_import_0));
         assert!(new_source_code.contains(&new_import_1));
