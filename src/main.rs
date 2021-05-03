@@ -12,6 +12,7 @@ use tree_sitter_typescript::{language_tsx, language_typescript};
 use walkdir::{DirEntry, WalkDir};
 
 mod import_replacer;
+use import_replacer::{ImportReplacer, Lang};
 
 #[derive(StructOpt)]
 struct Args {
@@ -227,15 +228,46 @@ fn parse_treesitter_tree(source_code: &String, language: Language) -> Result<Tre
 //         ))
 // }
 //
-//
 
-fn strip_middle_relative_parts(path: &PathBuf) -> PathBuf {
+fn update_imports(
+    source_code: String,
+    lang: Lang,
+    source_file: &PathBuf,
+    target_file: &PathBuf,
+) -> Result<String> {
+    let source_dir = get_parent(&source_file);
+    let target_dir = get_parent(&target_file);
+
+    if source_dir.eq(&target_dir) {
+        return Ok(source_code);
+    }
+
+    // TODO get Lang from source_file name
+
+    let mut import_replacer = ImportReplacer::new(&source_code, lang)?;
+
+    import_replacer.replace_imports(|import_string| {
+        let path = convert_import_string_to_path(&source_dir, import_string);
+        let new_import = get_nodejs_imports_from_paths(&target_dir, &path);
+        new_import
+    })?;
+
+    Ok(import_replacer.to_string())
+}
+
+fn get_parent(path: &PathBuf) -> PathBuf {
+    let mut path = path.clone();
+    path.pop();
+    path
+}
+
+fn normalize_path(path: &PathBuf) -> Result<PathBuf> {
     let mut skip = 0;
     let mut components = vec![];
 
     for component in path.components().into_iter().rev() {
         match component {
-            Component::Normal(str) => {
+            Component::Normal(_) => {
                 if skip > 0 {
                     skip -= 1;
                 } else {
@@ -251,13 +283,15 @@ fn strip_middle_relative_parts(path: &PathBuf) -> PathBuf {
             }
         }
     }
-
-    components.into_iter().rev().collect()
+    match skip {
+        0 => Ok(components.into_iter().rev().collect()),
+        _ => Err(anyhow!("Failed to normalize path {:?}", path)),
+    }
 }
 
-fn convert_import_string_to_path(file_dir: &PathBuf, import_string: &String) -> PathBuf {
+fn convert_import_string_to_path(source_dir: &PathBuf, import_string: &String) -> PathBuf {
     let rel_import: PathBuf = import_string.into();
-    file_dir.join(rel_import)
+    source_dir.join(rel_import)
 }
 
 fn to_nodejs_import(rel_path: &PathBuf) -> Result<String> {
@@ -275,22 +309,23 @@ fn to_nodejs_import(rel_path: &PathBuf) -> Result<String> {
     })
 }
 
+fn get_rel_path(from_path: &PathBuf, to_path: &PathBuf) -> Result<PathBuf> {
+    let normalized_from_path = normalize_path(from_path)?;
+    let normalized_to_path = normalize_path(to_path)?;
+    diff_paths(normalized_to_path, normalized_from_path).ok_or(anyhow!(
+        "Failed to get relative path from {:?} to {:?}",
+        from_path,
+        to_path,
+    ))
+}
+
 fn get_nodejs_imports_from_paths(file: &PathBuf, required_file: &PathBuf) -> Result<String> {
     let mut file_dir = file.clone();
     file_dir.pop();
 
-    let rel_path = diff_paths(required_file, file_dir).ok_or(anyhow!(
-        "failed to diff paths from {:?} to {:?}",
-        file,
-        required_file
-    ))?;
-
+    let rel_path = get_rel_path(&file_dir, required_file)?;
     to_nodejs_import(&rel_path)
 }
-
-// fn strip_middle_relative_parts(path: &mut PathBuf) {
-//     path.components()
-// }
 
 #[cfg(test)]
 mod tests {
@@ -342,7 +377,7 @@ mod tests {
         gets_import_from_path_3: ("lol.ts", "index.ts", "."),
     }
 
-    macro_rules! rel_strip_tests {
+    macro_rules! normalize_path_tests {
         ($($name:ident: $value:expr,)*) => {
         $(
             #[test]
@@ -350,14 +385,14 @@ mod tests {
                 let (path, expected) = $value;
                 let expected: PathBuf = expected.into();
                 let path: PathBuf = path.into();
-                let result = super::strip_middle_relative_parts(&path);
+                let result = super::normalize_path(&path).unwrap();
                 assert_eq!(expected, result);
             }
         )*
         }
     }
 
-    rel_strip_tests! {
+    normalize_path_tests! {
         strips_0: ("a/b/../c", "a/c"),
         strips_1: ("a/b/./../c", "a/c"),
         strips_2: ("a/b/./../c/d", "a/c/d"),

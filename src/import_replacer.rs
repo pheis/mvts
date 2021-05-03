@@ -34,6 +34,10 @@ impl ImportReplacer {
         })
     }
 
+    pub fn to_string(&self) -> String {
+        self.text.to_string()
+    }
+
     pub fn replace_imports<F>(&mut self, replacer: F) -> Result<()>
     where
         F: Fn(&String) -> Result<String>,
