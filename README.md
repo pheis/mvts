@@ -9,7 +9,10 @@ mvts takes two arguments: source_file_path and target_file_path.
 
 `mvts source_file.ts some_folder/another_folder/moved_source_file.ts`
 
-mvts moves source file to target_file_path and edits it's imports so that they are correct in the new location. mvts finds all files that import moved file and update them accordingly.
+mvts moves source file to target_file_path and edits it's imports so that they are correct in the new location. mvts finds all files that import moved file and updates them accordingly.
+
+### Screenshot of git status after using mvts
+[![A screenshot of a sample move with mvts](https://github.com/pheis/mvts/raw/master/screenshot.png)](#Usage)
 
 ## Installation
 
