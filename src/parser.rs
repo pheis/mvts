@@ -17,28 +17,28 @@ fn to_language(language: &Lang) -> Language {
     }
 }
 
-pub struct ImportReplacer {
+pub struct CST {
     query: Query,
     tree: Tree,
     text: Rope,
 }
 
-impl ImportReplacer {
+impl CST {
     pub fn new(source_code: &String, lang: Lang) -> Result<Self> {
         let language = to_language(&lang);
 
-        Ok(ImportReplacer {
+        Ok(CST {
             tree: parse_treesitter_tree(&source_code, language)?,
             text: Rope::from_str(&source_code),
             query: Query::new(language, &QUERY).unwrap(),
         })
     }
 
-    pub fn to_string(&self) -> String {
+    pub fn get_source_code(&self) -> String {
         self.text.to_string()
     }
 
-    pub fn replace_imports<F>(&mut self, replacer: F) -> Result<()>
+    pub fn replace_all_imports<F>(&mut self, replacer: F) -> Result<()>
     where
         F: Fn(&String) -> Result<String>,
     {
@@ -70,6 +70,8 @@ impl ImportReplacer {
         }
         Ok(())
     }
+
+    pub fn replace_one_import(old: String, new: String) {}
 }
 
 fn parse_treesitter_tree(source_code: &String, language: Language) -> Result<Tree> {
@@ -94,14 +96,13 @@ mod tests {
             "#
         .into();
 
-        let mut import_replacer =
-            super::ImportReplacer::new(&source, super::Lang::TypeScript).unwrap();
+        let mut concrete_syntax_tree = super::CST::new(&source, super::Lang::TypeScript).unwrap();
 
-        import_replacer
-            .replace_imports(|_| Ok("WORKS".into()))
+        concrete_syntax_tree
+            .replace_all_imports(|_| Ok("WORKS".into()))
             .unwrap();
 
-        let new_source_code = import_replacer.text.to_string();
+        let new_source_code = import_replacer.get_source_code();
 
         assert!(new_source_code.contains("import some from 'WORKS';"));
     }
