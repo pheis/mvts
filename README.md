@@ -12,7 +12,7 @@ mvts takes two arguments: source_file_path and target_file_path.
 mvts moves source file to target_file_path and edits it's imports so that they are correct in the new location. mvts finds all files that import moved file and updates them accordingly.
 
 ### Screenshot of git status after using mvts
-[![A screenshot of a sample move with mvts](https://github.com/pheis/mvts/raw/master/screenshot.png)](#Usage)
+![A screenshot of a sample move with mvts](screenshot.png?raw=true "Screenshot of git status after using mvts")
 
 ## Installation
 
