@@ -1,50 +1,62 @@
 use anyhow::{anyhow, Result};
-use ropey::Rope;
 use std::fs;
-use std::io::BufWriter;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-// use walkdir::{DirEntry, WalkDir};
-
+mod grep;
+mod import_string;
 mod parser;
-use parser::{Lang, CST};
-
 mod path;
 
-mod import_string;
+use parser::{Lang, CST};
 
 #[derive(StructOpt)]
-struct Args {
+struct Cli {
     #[structopt(parse(from_os_str))]
-    source: std::path::PathBuf,
+    source_path: std::path::PathBuf,
     #[structopt(parse(from_os_str))]
-    target: std::path::PathBuf,
+    target_path: std::path::PathBuf,
 }
 
 fn main() -> Result<()> {
-    let args = Args::from_args();
+    let Cli {
+        source_path,
+        target_path,
+    } = Cli::from_args();
 
-    // let text = update_imports(&args)?;
+    let mut target_file = target_path;
 
-    // move_and_replace(&args, text)?;
-    // find_references(&args)?;
-    fs::rename(&source, &target_path)?;
-    text.write_to(BufWriter::new(fs::File::create(target_path)?))?;
-
-    Ok(())
-}
-
-fn move_and_replace(Args { target, source }: &Args, text: Rope) -> Result<()> {
-    let mut target_path = target.clone();
-
-    if target.is_dir() {
-        let file_name = source.file_name().unwrap();
-        target_path.push(file_name);
+    if target_file.is_dir() {
+        let file_name = source_path.file_name().unwrap();
+        target_file.push(file_name);
     }
 
-    fs::rename(&source, &target_path)?;
-    text.write_to(BufWriter::new(fs::File::create(target_path)?))?;
+    let canonicalized_source_path = fs::canonicalize(&source_path)?;
+    let affected_files = grep::find_affected_files(&canonicalized_source_path)?;
+
+    fs::rename(&source_path, &target_file)?;
+    let canonicalized_target_path = fs::canonicalize(&target_file)?;
+
+    let source_code = fs::read_to_string(&target_file)?;
+    let new_source_code = update_imports(source_code, &source_path, &target_file)?;
+
+    fs::write(target_file, new_source_code)?;
+
+    for affected_file in affected_files.iter() {
+        let affected_file = fs::canonicalize(affected_file)
+            .map_err(|_| anyhow!("can't find {:?}", affected_file))?;
+
+        let affected_source_code = fs::read_to_string(&affected_file)?;
+
+        let updated_source_code = update_import(
+            &affected_source_code,
+            &affected_file,
+            &canonicalized_source_path,
+            &canonicalized_target_path,
+        )?;
+
+        fs::write(affected_file, updated_source_code)?;
+    }
 
     Ok(())
 }
@@ -78,10 +90,27 @@ fn update_imports(
     let mut concrete_syntax_tree = CST::new(&source_code, lang)?;
 
     concrete_syntax_tree.replace_all_imports(|import_string| {
-        let path = import_string::to_path(&source_file, import_string)?;
+        let path = import_string::to_path(&source_file, &import_string)?;
         let new_import = import_string::from_paths(&target_file, &path);
         new_import
     })?;
+
+    Ok(concrete_syntax_tree.get_source_code())
+}
+
+fn update_import(
+    source_code: &String,
+    source_file: &PathBuf,
+    old_import_location: &PathBuf,
+    new_import_location: &PathBuf,
+) -> Result<String> {
+    let lang = infer_langauge_from_suffix(&source_file)?;
+    let mut concrete_syntax_tree = CST::new(&source_code, lang)?;
+
+    let old_import = import_string::from_paths(source_file, old_import_location)?;
+    let new_import = import_string::from_paths(source_file, new_import_location)?;
+
+    concrete_syntax_tree.replace_one_import(&old_import, &new_import)?;
 
     Ok(concrete_syntax_tree.get_source_code())
 }

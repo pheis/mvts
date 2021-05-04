@@ -40,7 +40,7 @@ impl CST {
 
     pub fn replace_all_imports<F>(&mut self, replacer: F) -> Result<()>
     where
-        F: Fn(&String) -> Result<String>,
+        F: Fn(String) -> Result<String>,
     {
         let root = self.tree.root_node();
         let mut query_cursor = QueryCursor::new();
@@ -62,7 +62,7 @@ impl CST {
                     continue;
                 }
 
-                let new_import = replacer(&import_string)?;
+                let new_import = replacer(import_string)?;
 
                 self.text.remove(start_idx..end_idx);
                 self.text.insert(start_idx, &new_import);
@@ -71,7 +71,12 @@ impl CST {
         Ok(())
     }
 
-    pub fn replace_one_import(old: String, new: String) {}
+    pub fn replace_one_import(&mut self, old: &str, new: &str) -> Result<()> {
+        self.replace_all_imports(|import_string| match import_string {
+            x if x.eq(old) => Ok(new.to_string()),
+            _ => Ok(import_string),
+        })
+    }
 }
 
 fn parse_treesitter_tree(source_code: &String, language: Language) -> Result<Tree> {
@@ -87,9 +92,10 @@ fn parse_treesitter_tree(source_code: &String, language: Language) -> Result<Tre
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_works() {
+    fn it_replaces_many_imports() {
         let source = r#"
             import some from '../../some';
+            import other from '../../other';
             function main() {
                 const other = require('./other');
             }
@@ -102,9 +108,33 @@ mod tests {
             .replace_all_imports(|_| Ok("WORKS".into()))
             .unwrap();
 
-        let new_source_code = import_replacer.get_source_code();
+        let new_source_code = concrete_syntax_tree.get_source_code();
 
         assert!(new_source_code.contains("import some from 'WORKS';"));
+        assert!(new_source_code.contains("import other from 'WORKS';"));
+    }
+
+    #[test]
+    fn it_replaces_one_import() {
+        let source = r#"
+            import some from '../../some';
+            import other from '../../other';
+            function main() {
+                const other = require('./other');
+            }
+            "#
+        .into();
+
+        let mut concrete_syntax_tree = super::CST::new(&source, super::Lang::TypeScript).unwrap();
+
+        concrete_syntax_tree
+            .replace_one_import("../../other", "replaced")
+            .unwrap();
+
+        let new_source_code = concrete_syntax_tree.get_source_code();
+
+        assert!(new_source_code.contains("import some from '../../some';"));
+        assert!(new_source_code.contains("import other from 'replaced';"));
     }
 }
 

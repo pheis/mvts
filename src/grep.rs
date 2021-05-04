@@ -1,4 +1,11 @@
-fn filter_file(entry: &DirEntry) -> bool {
+use anyhow::{anyhow, Result};
+use std::fs;
+use std::path::PathBuf;
+use walkdir::{DirEntry, WalkDir};
+
+use crate::import_string;
+
+fn is_ok_file(entry: &DirEntry) -> bool {
     entry
         .file_name()
         .to_str()
@@ -10,12 +17,10 @@ fn filter_file(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
-fn find_references(args: &Args) -> Result<()> {
-    let canon_source_path = fs::canonicalize(&args.source)?;
-
+pub fn find_affected_files(moved_file: &PathBuf) -> Result<Vec<PathBuf>> {
     let walker = WalkDir::new(".")
         .into_iter()
-        .filter_entry(|e| filter_file(e))
+        .filter_entry(|e| is_ok_file(e))
         .filter_map(|e| e.ok())
         .filter(|e| {
             e.file_name()
@@ -25,20 +30,29 @@ fn find_references(args: &Args) -> Result<()> {
         })
         .filter(|entry| {
             fs::canonicalize(entry.path())
-                .map_err(|_| anyhow!("no canon for you"))
-                .and_then(|canon_path| sniff_ref_for_file(&canon_source_path, &canon_path))
+                .map_err(|_| anyhow!("Failed to canonicalize path"))
+                .and_then(|file_path| has_import_to_file(&file_path, &moved_file))
                 .unwrap_or(false)
         });
 
+    let mut files = vec![];
+
     for entry in walker {
-        println!("{}", entry.path().display());
+        let canon_entry = fs::canonicalize(entry.path())?;
+        let canon_moved_file = fs::canonicalize(moved_file)?;
+
+        if canon_entry.eq(&canon_moved_file) {
+            continue;
+        }
+
+        files.push(entry.path().to_path_buf());
     }
 
-    Ok(())
+    Ok(files)
 }
 
-fn sniff_ref_for_file(source: &PathBuf, path: &PathBuf) -> Result<bool> {
-    let import_string = get_ts_import(&source, &path)?;
-    let content = fs::read_to_string(path)?;
+fn has_import_to_file(source_file: &PathBuf, imported_file: &PathBuf) -> Result<bool> {
+    let import_string = import_string::from_paths(&source_file, &imported_file)?;
+    let content = fs::read_to_string(source_file)?;
     Ok(content.contains(&import_string))
 }
