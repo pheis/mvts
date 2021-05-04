@@ -5,8 +5,6 @@ use std::io::BufWriter;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
-// use tree_sitter::{Language, Parser, Query, QueryCursor, Tree};
-// use tree_sitter_typescript::{language_tsx, language_typescript};
 // use walkdir::{DirEntry, WalkDir};
 
 mod replacer;
@@ -31,6 +29,8 @@ fn main() -> Result<()> {
 
     // move_and_replace(&args, text)?;
     // find_references(&args)?;
+    fs::rename(&source, &target_path)?;
+    text.write_to(BufWriter::new(fs::File::create(target_path)?))?;
 
     Ok(())
 }
@@ -47,17 +47,6 @@ fn move_and_replace(Args { target, source }: &Args, text: Rope) -> Result<()> {
     text.write_to(BufWriter::new(fs::File::create(target_path)?))?;
 
     Ok(())
-}
-
-fn get_canon_dir(path: &PathBuf) -> Result<PathBuf> {
-    match path.is_dir() {
-        true => Ok(fs::canonicalize(path)?),
-        false => {
-            let mut stem = path.clone();
-            stem.pop();
-            Ok(fs::canonicalize(stem)?)
-        }
-    }
 }
 
 // fn filter_file(entry: &DirEntry) -> bool {
@@ -151,7 +140,7 @@ mod tests {
     fn it_updates_imports_0() -> Result<()> {
         let code: String = r#"
             import some from '../../some';
-            import some from '../../other';
+            import other from '../../other';
             function main() {
                 console.log("hullo world");
             }
@@ -164,7 +153,7 @@ mod tests {
         let new_source_code = super::update_imports(code, &source, &target)?;
 
         let new_import_0: String = "import some from '../../../some';".into();
-        let new_import_1: String = "import some from '../../../other';".into();
+        let new_import_1: String = "import other from '../../../other';".into();
 
         assert!(new_source_code.contains(&new_import_0));
         assert!(new_source_code.contains(&new_import_1));
@@ -175,7 +164,7 @@ mod tests {
     fn it_updates_imports_1() -> Result<()> {
         let code: String = r#"
             import some from '../../some';
-            import some from '../../other';
+            import other from '../../other';
             function main() {
                 console.log("hullo world");
             }
@@ -188,7 +177,7 @@ mod tests {
         let new_source_code = super::update_imports(code, &source, &target)?;
 
         let new_import_0: String = "import some from './b/some';".into();
-        let new_import_1: String = "import some from './b/other';".into();
+        let new_import_1: String = "import other from './b/other';".into();
 
         assert!(new_source_code.contains(&new_import_0));
         assert!(new_source_code.contains(&new_import_1));
