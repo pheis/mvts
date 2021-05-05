@@ -15,7 +15,7 @@ pub fn to_path(file: &PathBuf, import_string: &String) -> Result<PathBuf> {
 pub fn from_relative_path(rel_path: &PathBuf) -> Result<String> {
     let import_string = rel_path.to_str().ok_or(anyhow!("Non utf-8 path"))?;
 
-    let re = Regex::new(r"/index\.ts|\.\w+$").unwrap();
+    let re = Regex::new(r"/index\.(jsx|js|tsx|ts)|\.\w+$").unwrap();
     let import_string = re.replace_all(import_string, "");
 
     let re = Regex::new(r"^index$").unwrap();
@@ -59,6 +59,8 @@ mod tests {
         rel_path_to_import_4: ("index.tsx", "."),
         rel_path_to_import_5: ("juuh/elikkas/index.ts", "./juuh/elikkas"),
         rel_path_to_import_6: ("juuh/elikkas/joo.tsx", "./juuh/elikkas/joo"),
+
+        rel_path_to_import_7: ("a/index.tsx", "./a"),
     }
 
     macro_rules! gets_import_from_paths_tests {
@@ -82,6 +84,7 @@ mod tests {
         gets_import_from_paths_1: ("some/index.ts", "other/no/common", "../other/no/common"),
         gets_import_from_paths_2: ("index.ts", "deeper/in/path", "./deeper/in/path"),
         gets_import_from_paths_3: ("lol.ts", "index.ts", "."),
+        gets_import_from_paths_4: ("a/b/c/index.ts", "a/b/c/d/index.tsx", "./d"),
     }
 
     macro_rules! to_path_tests {
