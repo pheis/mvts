@@ -78,10 +78,10 @@ mod tests {
     }
 
     gets_import_from_paths_tests! {
-        gets_import_from_path_0: ("src/views/some/Juuh.tsx", "src/store/index.ts", "../../store"),
-        gets_import_from_path_1: ("some/index.ts", "other/no/common", "../other/no/common"),
-        gets_import_from_path_2: ("index.ts", "deeper/in/path", "./deeper/in/path"),
-        gets_import_from_path_3: ("lol.ts", "index.ts", "."),
+        gets_import_from_paths_0: ("src/views/some/Juuh.tsx", "src/store/index.ts", "../../store"),
+        gets_import_from_paths_1: ("some/index.ts", "other/no/common", "../other/no/common"),
+        gets_import_from_paths_2: ("index.ts", "deeper/in/path", "./deeper/in/path"),
+        gets_import_from_paths_3: ("lol.ts", "index.ts", "."),
     }
 
     macro_rules! to_path_tests {
