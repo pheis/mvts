@@ -40,7 +40,7 @@ impl CST {
 
     pub fn replace_all_imports<F>(&mut self, replacer: F) -> Result<()>
     where
-        F: Fn(String) -> Result<String>,
+        F: Fn(&String) -> Result<String>,
     {
         let root = self.tree.root_node();
         let mut query_cursor = QueryCursor::new();
@@ -62,7 +62,11 @@ impl CST {
                     continue;
                 }
 
-                let new_import = replacer(import_string)?;
+                let new_import = replacer(&import_string)?;
+
+                if new_import.eq(&import_string) {
+                    continue;
+                }
 
                 self.text.remove(start_idx..end_idx);
                 self.text.insert(start_idx, &new_import);
@@ -74,7 +78,7 @@ impl CST {
     pub fn replace_one_import(&mut self, old: &str, new: &str) -> Result<()> {
         self.replace_all_imports(|import_string| match import_string {
             x if x.eq(old) => Ok(new.to_string()),
-            _ => Ok(import_string),
+            _ => Ok(import_string.clone()),
         })
     }
 }
