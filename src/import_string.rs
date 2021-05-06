@@ -112,5 +112,6 @@ mod tests {
         to_path_1: ("a/b/c/file.ts", ".", "a/b/c"),
         to_path_2: ("a/b/c/file.ts", "./d/e", "a/b/c/d/e"),
         to_path_3: ("a/b/c/file.ts", "../", "a/b"),
+        to_path_4: ("a/b/c/file.ts", "./index", "a/b/c/index"),
     }
 }
