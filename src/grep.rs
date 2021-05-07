@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::import_string;
+use crate::path::normalize;
 
 fn is_ok_file(entry: &DirEntry) -> bool {
     entry
@@ -17,7 +18,9 @@ fn is_ok_file(entry: &DirEntry) -> bool {
         .unwrap_or(false)
 }
 
-pub fn find_affected_files(moved_file: &PathBuf) -> Result<Vec<PathBuf>> {
+pub fn find_affected_files(current_dir: &PathBuf, moved_file: &PathBuf) -> Result<Vec<PathBuf>> {
+    let full_moved_path = get_full_path(current_dir, moved_file)?;
+
     let walker = WalkDir::new(".")
         .into_iter()
         .filter_entry(|e| is_ok_file(e))
@@ -29,19 +32,20 @@ pub fn find_affected_files(moved_file: &PathBuf) -> Result<Vec<PathBuf>> {
                 .unwrap_or(false)
         })
         .filter(|entry| {
-            fs::canonicalize(entry.path())
-                .map_err(|_| anyhow!("Failed to canonicalize path"))
-                .and_then(|file_path| has_import_to_file(&file_path, &moved_file))
+            let full_path = current_dir.join(entry.path());
+            normalize(&full_path)
+                .map_err(|_| anyhow!("Failed to normalize path {:?}", entry.path()))
+                .and_then(|file_path| has_import_to_file(&file_path, &full_moved_path))
                 .unwrap_or(false)
         });
 
     let mut files = vec![];
 
     for entry in walker {
-        let canon_entry = fs::canonicalize(entry.path())?;
-        let canon_moved_file = fs::canonicalize(moved_file)?;
+        let full_entry_path = current_dir.join(entry.path());
+        let full_entry_path = normalize(&full_entry_path)?;
 
-        if canon_entry.eq(&canon_moved_file) {
+        if full_entry_path.eq(&full_moved_path) {
             continue;
         }
 
@@ -55,4 +59,9 @@ fn has_import_to_file(source_file: &PathBuf, imported_file: &PathBuf) -> Result<
     let import_string = import_string::from_paths(&source_file, &imported_file)?;
     let content = fs::read_to_string(source_file)?;
     Ok(content.contains(&import_string))
+}
+
+fn get_full_path(current_dir: &PathBuf, path: &PathBuf) -> Result<PathBuf> {
+    let full_path = current_dir.join(path);
+    normalize(&full_path)
 }

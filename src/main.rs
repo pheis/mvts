@@ -1,4 +1,5 @@
 use anyhow::{anyhow, Result};
+use std::env;
 use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
@@ -10,6 +11,7 @@ mod parser;
 mod path;
 
 use edit::{update_import, update_imports};
+use path::normalize;
 
 #[derive(StructOpt)]
 struct Cli {
@@ -32,29 +34,37 @@ fn main() -> Result<()> {
         target_file.push(file_name);
     }
 
-    let canonicalized_source_path = fs::canonicalize(&source_path)?;
-    let affected_files = grep::find_affected_files(&canonicalized_source_path)?;
+    let current_dir = env::current_dir()?;
+
+    let affected_files = grep::find_affected_files(&current_dir, &source_path)?;
 
     move_file(&source_path, &target_file)?;
-    let canonicalized_target_path = fs::canonicalize(&target_file)?;
+
+    let full_source_path = get_full_path(&current_dir, &source_path)?;
+    let full_target_path = get_full_path(&current_dir, &target_file)?;
 
     for affected_file in affected_files.iter() {
-        let affected_file = fs::canonicalize(affected_file)
-            .map_err(|_| anyhow!("can't find {:?}", affected_file))?;
+        let affected_file = get_full_path(&current_dir, affected_file)?;
 
-        let affected_source_code = fs::read_to_string(&affected_file)?;
+        let affected_source_code = fs::read_to_string(&affected_file)
+            .map_err(|_| anyhow!("Could not find {:?}", affected_file))?;
 
         let updated_source_code = update_import(
             &affected_source_code,
             &affected_file,
-            &canonicalized_source_path,
-            &canonicalized_target_path,
+            &full_source_path,
+            &full_target_path,
         )?;
 
         fs::write(affected_file, updated_source_code)?;
     }
 
     Ok(())
+}
+
+fn get_full_path(current_dir: &PathBuf, path: &PathBuf) -> Result<PathBuf> {
+    let full_path = current_dir.join(path);
+    normalize(&full_path)
 }
 
 fn move_file(source_path: &PathBuf, target_file: &PathBuf) -> Result<()> {
