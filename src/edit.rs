@@ -18,7 +18,7 @@ fn infer_langauge_from_suffix(file_name: &PathBuf) -> Result<Lang> {
     }
 }
 
-fn replace_rel_imports<F>(source_code: &String, lang: Lang, replacer: F) -> Result<String>
+fn replace_rel_imports<F>(source_code: &str, lang: Lang, replacer: F) -> Result<String>
 where
     F: Fn(&String) -> Result<String>,
 {
@@ -59,7 +59,7 @@ pub fn update_imports(
 }
 
 pub fn update_import(
-    source_code: &String,
+    source_code: &str,
     source_file: &PathBuf,
     old_import_location: &PathBuf,
     new_import_location: &PathBuf,
