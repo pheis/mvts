@@ -3,19 +3,20 @@ use std::fs;
 use std::path::PathBuf;
 use structopt::StructOpt;
 
+mod edit;
 mod grep;
 mod import_string;
 mod parser;
 mod path;
 
-use parser::{Lang, CST};
+use edit::{update_import, update_imports};
 
 #[derive(StructOpt)]
 struct Cli {
     #[structopt(parse(from_os_str))]
-    source_path: std::path::PathBuf,
+    source_path: PathBuf,
     #[structopt(parse(from_os_str))]
-    target_path: std::path::PathBuf,
+    target_path: PathBuf,
 }
 
 fn main() -> Result<()> {
@@ -59,112 +60,4 @@ fn main() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn infer_langauge_from_suffix(file_name: &PathBuf) -> Result<Lang> {
-    let suffix = file_name
-        .extension()
-        .and_then(|os_str| os_str.to_str())
-        .ok_or_else(|| anyhow!("Missing suffix on file"))?;
-
-    match suffix {
-        "ts" => Ok(Lang::TypeScript),
-        "tsx" => Ok(Lang::TypeScriptTsx),
-        suffix => Err(anyhow!("{:?} files are not supported", suffix)),
-    }
-}
-
-fn update_imports(
-    source_code: String,
-    source_file: &PathBuf,
-    target_file: &PathBuf,
-) -> Result<String> {
-    let source_dir = path::get_parent(&source_file);
-    let target_dir = path::get_parent(&target_file);
-
-    if source_dir.eq(&target_dir) {
-        return Ok(source_code);
-    }
-
-    let lang = infer_langauge_from_suffix(&source_file)?;
-    let mut concrete_syntax_tree = CST::new(&source_code, lang)?;
-
-    concrete_syntax_tree.replace_all_imports(|import_string| {
-        let path = import_string::to_path(&source_file, &import_string)?;
-
-        import_string::from_paths(&target_file, &path)
-    })?;
-
-    Ok(concrete_syntax_tree.get_source_code())
-}
-
-fn update_import(
-    source_code: &str,
-    source_file: &PathBuf,
-    old_import_location: &PathBuf,
-    new_import_location: &PathBuf,
-) -> Result<String> {
-    let lang = infer_langauge_from_suffix(&source_file)?;
-    let mut concrete_syntax_tree = CST::new(source_code, lang)?;
-
-    let old_import = import_string::from_paths(source_file, old_import_location)?;
-    let new_import = import_string::from_paths(source_file, new_import_location)?;
-
-    concrete_syntax_tree.replace_one_import(&old_import, &new_import)?;
-
-    Ok(concrete_syntax_tree.get_source_code())
-}
-
-#[cfg(test)]
-mod tests {
-    use anyhow::Result;
-    use std::path::PathBuf;
-
-    #[test]
-    fn it_updates_imports_0() -> Result<()> {
-        let code: String = r#"
-            import some from '../../some';
-            import other from '../../other';
-            function main() {
-                console.log("hullo world");
-            }
-            "#
-        .into();
-
-        let source: PathBuf = "/src/a/b/c/d/source.ts".into();
-        let target: PathBuf = "/src/a/b/c/d/e/target.ts".into();
-
-        let new_source_code = super::update_imports(code, &source, &target)?;
-
-        let new_import_0: String = "import some from '../../../some';".into();
-        let new_import_1: String = "import other from '../../../other';".into();
-
-        assert!(new_source_code.contains(&new_import_0));
-        assert!(new_source_code.contains(&new_import_1));
-        Ok(())
-    }
-
-    #[test]
-    fn it_updates_imports_1() -> Result<()> {
-        let code: String = r#"
-            import some from '../../some';
-            import other from '../../other';
-            function main() {
-                console.log("hullo world");
-            }
-            "#
-        .into();
-
-        let source: PathBuf = "/src/a/b/c/d/source.ts".into();
-        let target: PathBuf = "/src/a/target.ts".into();
-
-        let new_source_code = super::update_imports(code, &source, &target)?;
-
-        let new_import_0: String = "import some from './b/some';".into();
-        let new_import_1: String = "import other from './b/other';".into();
-
-        assert!(new_source_code.contains(&new_import_0));
-        assert!(new_source_code.contains(&new_import_1));
-        Ok(())
-    }
 }

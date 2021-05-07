@@ -17,70 +17,59 @@ fn to_language(language: &Lang) -> Language {
     }
 }
 
-pub struct CST {
-    query: Query,
-    tree: Tree,
-    text: Rope,
+pub struct TextSlice {
+    start_row: usize,
+    start_col: usize,
+    end_row: usize,
+    end_col: usize,
 }
 
-impl CST {
+impl TextSlice {
+    pub fn to_index_range(&self, rope: &Rope) -> (usize, usize) {
+        let start_idx = rope.line_to_char(self.start_row) + self.start_col;
+        let end_idx = rope.line_to_char(self.end_row) + self.end_col;
+        (start_idx, end_idx)
+    }
+}
+
+pub struct ImportFinder {
+    tree: Tree,
+    query: Query,
+    cursor: QueryCursor,
+}
+
+impl ImportFinder {
     pub fn new(source_code: &str, lang: Lang) -> Result<Self> {
         let language = to_language(&lang);
 
-        Ok(CST {
-            tree: parse_treesitter_tree(source_code, language)?,
-            text: Rope::from_str(&source_code),
-            query: Query::new(language, &QUERY).unwrap(),
+        let tree = parse_treesitter_tree(source_code, language)?;
+        let query = Query::new(language, &QUERY).unwrap();
+        let cursor = QueryCursor::new();
+
+        Ok(Self {
+            tree,
+            query,
+            cursor,
         })
     }
 
-    pub fn get_source_code(&self) -> String {
-        self.text.to_string()
-    }
-
-    // Iter<Node>,  no mut, split text out of this struct
-    pub fn replace_all_imports<F>(&mut self, replacer: F) -> Result<()>
-    where
-        F: Fn(&String) -> Result<String>,
-    {
-        let root = self.tree.root_node();
-        let mut query_cursor = QueryCursor::new();
-
-        for node in query_cursor
-            .matches(&self.query, root, |_| "")
+    pub fn find_imports(&mut self) -> impl Iterator<Item = TextSlice> + '_ {
+        self.cursor
+            .matches(&self.query, self.tree.root_node(), |_| "")
             .into_iter()
             .flat_map(|qm| qm.captures.iter())
-            .map(|qc| qc.node)
-        {
-            let start_point = node.start_position();
-            let start_idx = self.text.line_to_char(start_point.row) + start_point.column + 1;
+            .map(|query_capture| query_capture.node)
+            .map(|node| {
+                let start_point = node.start_position();
+                let end_point = node.end_position();
 
-            let end_point = node.end_position();
-            let end_idx = self.text.line_to_char(end_point.row) + end_point.column - 1;
-
-            let import_string = self.text.slice(start_idx..end_idx).to_string();
-
-            if !import_string.starts_with('.') {
-                continue;
-            }
-
-            let new_import = replacer(&import_string)?;
-
-            if new_import.eq(&import_string) {
-                continue;
-            }
-
-            self.text.remove(start_idx..end_idx);
-            self.text.insert(start_idx, &new_import);
-        }
-        Ok(())
-    }
-
-    pub fn replace_one_import(&mut self, old: &str, new: &str) -> Result<()> {
-        self.replace_all_imports(|import_string| match import_string {
-            x if x.eq(old) => Ok(new.to_string()),
-            _ => Ok(import_string.clone()),
-        })
+                TextSlice {
+                    start_row: start_point.row,
+                    start_col: start_point.column + 1,
+                    end_row: end_point.row,
+                    end_col: end_point.column - 1,
+                }
+            })
     }
 }
 
@@ -92,55 +81,6 @@ fn parse_treesitter_tree(source_code: &str, language: Language) -> Result<Tree> 
     parser
         .parse(source_code, None)
         .ok_or_else(|| anyhow!("Failed to parse"))
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_replaces_many_imports() {
-        let source: String = r#"
-            import some from '../../some';
-            import other from '../../other';
-            function main() {
-                const other = require('./other');
-            }
-            "#
-        .into();
-
-        let mut concrete_syntax_tree = super::CST::new(&source, super::Lang::TypeScript).unwrap();
-
-        concrete_syntax_tree
-            .replace_all_imports(|_| Ok("WORKS".into()))
-            .unwrap();
-
-        let new_source_code = concrete_syntax_tree.get_source_code();
-
-        assert!(new_source_code.contains("import some from 'WORKS';"));
-        assert!(new_source_code.contains("import other from 'WORKS';"));
-    }
-
-    #[test]
-    fn it_replaces_one_import() {
-        let source: String = r#"
-            import some from '../../some';
-            import other from '../../other';
-            function main() {
-                const other = require('./other');
-            }
-            "#
-        .into();
-
-        let mut concrete_syntax_tree = super::CST::new(&source, super::Lang::TypeScript).unwrap();
-
-        concrete_syntax_tree
-            .replace_one_import("../../other", "replaced")
-            .unwrap();
-
-        let new_source_code = concrete_syntax_tree.get_source_code();
-
-        assert!(new_source_code.contains("import some from '../../some';"));
-        assert!(new_source_code.contains("import other from 'replaced';"));
-    }
 }
 
 // (call_expression
