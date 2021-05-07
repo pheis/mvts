@@ -35,11 +35,13 @@ pub fn diff(from_path: &PathBuf, to_path: &PathBuf) -> Result<PathBuf> {
     let normalized_from_path = normalize(from_path)?;
     let normalized_to_path = normalize(to_path)?;
 
-    diff_paths(normalized_to_path, normalized_from_path).ok_or(anyhow!(
-        "Failed to get relative path from {:?} to {:?}",
-        from_path,
-        to_path,
-    ))
+    diff_paths(normalized_to_path, normalized_from_path).ok_or_else(|| {
+        anyhow!(
+            "Failed to get relative path from {:?} to {:?}",
+            from_path,
+            to_path,
+        )
+    })
 }
 
 pub fn get_parent(path: &PathBuf) -> PathBuf {

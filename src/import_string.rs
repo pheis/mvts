@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::path;
 
-pub fn to_path(file: &PathBuf, import_string: &String) -> Result<PathBuf> {
+pub fn to_path(file: &PathBuf, import_string: &str) -> Result<PathBuf> {
     let dir = path::get_parent(file);
     let import_path: PathBuf = import_string.into();
     let path = dir.join(import_path);
@@ -13,17 +13,15 @@ pub fn to_path(file: &PathBuf, import_string: &String) -> Result<PathBuf> {
 }
 
 pub fn from_relative_path(rel_path: &PathBuf) -> Result<String> {
-    let import_string = rel_path.to_str().ok_or(anyhow!("Non utf-8 path"))?;
+    let path_string = rel_path.to_str().ok_or_else(|| anyhow!("Non utf-8 path"))?;
 
-    let re = Regex::new(r"/index\.(jsx|js|tsx|ts)|\.\w+$").unwrap();
-    let import_string = re.replace_all(import_string, "");
+    let re = Regex::new(r"(^|/)index\.(jsx|js|tsx|ts)|\.\w+$").unwrap();
+    let import_string = re.replace_all(path_string, "");
 
-    let re = Regex::new(r"^index$").unwrap();
-    let import_string = re.replace_all(&import_string, ".").to_string();
-
-    Ok(match import_string.starts_with(".") {
-        true => import_string,
-        false => "./".to_owned() + &import_string,
+    Ok(match import_string.as_ref() {
+        x if x.starts_with('.') => x.into(),
+        "" => ".".into(),
+        _ => "./".to_owned() + &import_string,
     })
 }
 
@@ -34,9 +32,41 @@ pub fn from_paths(file: &PathBuf, required_file: &PathBuf) -> Result<String> {
     from_relative_path(&rel_path)
 }
 
+pub fn is_import_from(
+    source_file: &PathBuf,
+    required_file: &PathBuf,
+    import_string: &str,
+) -> Result<bool> {
+    let wo_index = from_paths(&source_file, &required_file)?;
+    let with_index = wo_index.clone() + "/index";
+    Ok(import_string.eq(&with_index) || import_string.eq(&wo_index))
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+
+    macro_rules! is_relative_import_to_tests {
+        ($($name:ident: $value:expr,)*) => {
+        $(
+            #[test]
+            fn $name() {
+                let (source_file, required_file, import_string, expected) = $value;
+                let source_file: PathBuf = source_file.into();
+                let required_file: PathBuf = required_file.into();
+
+                let result = super::is_import_from(&source_file, &required_file, import_string,).unwrap();
+                assert_eq!(result, expected);
+            }
+        )*
+        }
+    }
+
+    is_relative_import_to_tests! {
+        is_relative_import_to_0: ("a/some_file.ts", "a/index.ts", "./index",  true),
+        is_relative_import_to_1: ("a/some_file.ts", "a/index.ts", ".", true),
+        is_relative_import_to_2: ("a/b/some_file.ts", "a/index.ts", "..", true),
+    }
 
     macro_rules! import_from_relative_path_tests {
         ($($name:ident: $value:expr,)*) => {

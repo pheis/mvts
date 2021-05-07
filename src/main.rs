@@ -65,7 +65,7 @@ fn infer_langauge_from_suffix(file_name: &PathBuf) -> Result<Lang> {
     let suffix = file_name
         .extension()
         .and_then(|os_str| os_str.to_str())
-        .ok_or(anyhow!("Missing suffix on file"))?;
+        .ok_or_else(|| anyhow!("Missing suffix on file"))?;
 
     match suffix {
         "ts" => Ok(Lang::TypeScript),
@@ -91,21 +91,21 @@ fn update_imports(
 
     concrete_syntax_tree.replace_all_imports(|import_string| {
         let path = import_string::to_path(&source_file, &import_string)?;
-        let new_import = import_string::from_paths(&target_file, &path);
-        new_import
+
+        import_string::from_paths(&target_file, &path)
     })?;
 
     Ok(concrete_syntax_tree.get_source_code())
 }
 
 fn update_import(
-    source_code: &String,
+    source_code: &str,
     source_file: &PathBuf,
     old_import_location: &PathBuf,
     new_import_location: &PathBuf,
 ) -> Result<String> {
     let lang = infer_langauge_from_suffix(&source_file)?;
-    let mut concrete_syntax_tree = CST::new(&source_code, lang)?;
+    let mut concrete_syntax_tree = CST::new(source_code, lang)?;
 
     let old_import = import_string::from_paths(source_file, old_import_location)?;
     let new_import = import_string::from_paths(source_file, new_import_location)?;

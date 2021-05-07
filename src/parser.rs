@@ -3,7 +3,7 @@ use ropey::Rope;
 use tree_sitter::{Language, Parser, Query, QueryCursor, Tree};
 use tree_sitter_typescript::{language_tsx, language_typescript};
 
-const QUERY: &'static str = "(import_statement (string) @import)";
+const QUERY: &str = "(import_statement (string) @import)";
 
 pub enum Lang {
     TypeScript,
@@ -24,11 +24,11 @@ pub struct CST {
 }
 
 impl CST {
-    pub fn new(source_code: &String, lang: Lang) -> Result<Self> {
+    pub fn new(source_code: &str, lang: Lang) -> Result<Self> {
         let language = to_language(&lang);
 
         Ok(CST {
-            tree: parse_treesitter_tree(&source_code, language)?,
+            tree: parse_treesitter_tree(source_code, language)?,
             text: Rope::from_str(&source_code),
             query: Query::new(language, &QUERY).unwrap(),
         })
@@ -38,6 +38,7 @@ impl CST {
         self.text.to_string()
     }
 
+    // Iter<Node>,  no mut, split text out of this struct
     pub fn replace_all_imports<F>(&mut self, replacer: F) -> Result<()>
     where
         F: Fn(&String) -> Result<String>,
@@ -45,32 +46,32 @@ impl CST {
         let root = self.tree.root_node();
         let mut query_cursor = QueryCursor::new();
 
-        for (query_matches, u) in query_cursor.captures(&self.query, root, |_| "") {
-            let captures = query_matches.captures;
-            for i in 0..(u + 1) {
-                let node = captures[i].node;
+        for node in query_cursor
+            .matches(&self.query, root, |_| "")
+            .into_iter()
+            .flat_map(|qm| qm.captures.iter())
+            .map(|qc| qc.node)
+        {
+            let start_point = node.start_position();
+            let start_idx = self.text.line_to_char(start_point.row) + start_point.column + 1;
 
-                let start_point = node.start_position();
-                let start_idx = self.text.line_to_char(start_point.row) + start_point.column + 1;
+            let end_point = node.end_position();
+            let end_idx = self.text.line_to_char(end_point.row) + end_point.column - 1;
 
-                let end_point = node.end_position();
-                let end_idx = self.text.line_to_char(end_point.row) + end_point.column - 1;
+            let import_string = self.text.slice(start_idx..end_idx).to_string();
 
-                let import_string = self.text.slice(start_idx..end_idx).to_string();
-
-                if !import_string.starts_with(".") {
-                    continue;
-                }
-
-                let new_import = replacer(&import_string)?;
-
-                if new_import.eq(&import_string) {
-                    continue;
-                }
-
-                self.text.remove(start_idx..end_idx);
-                self.text.insert(start_idx, &new_import);
+            if !import_string.starts_with('.') {
+                continue;
             }
+
+            let new_import = replacer(&import_string)?;
+
+            if new_import.eq(&import_string) {
+                continue;
+            }
+
+            self.text.remove(start_idx..end_idx);
+            self.text.insert(start_idx, &new_import);
         }
         Ok(())
     }
@@ -83,21 +84,21 @@ impl CST {
     }
 }
 
-fn parse_treesitter_tree(source_code: &String, language: Language) -> Result<Tree> {
+fn parse_treesitter_tree(source_code: &str, language: Language) -> Result<Tree> {
     let mut parser = Parser::new();
     parser
         .set_language(language)
         .map_err(|_| anyhow!("Language error"))?;
     parser
         .parse(source_code, None)
-        .ok_or(anyhow!("Failed to parse"))
+        .ok_or_else(|| anyhow!("Failed to parse"))
 }
 
 #[cfg(test)]
 mod tests {
     #[test]
     fn it_replaces_many_imports() {
-        let source = r#"
+        let source: String = r#"
             import some from '../../some';
             import other from '../../other';
             function main() {
@@ -120,7 +121,7 @@ mod tests {
 
     #[test]
     fn it_replaces_one_import() {
-        let source = r#"
+        let source: String = r#"
             import some from '../../some';
             import other from '../../other';
             function main() {

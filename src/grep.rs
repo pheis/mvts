@@ -10,7 +10,7 @@ fn is_ok_file(entry: &DirEntry) -> bool {
         .file_name()
         .to_str()
         .map(|s| {
-            let is_hidden_file = !s.eq(".") && s.starts_with(".");
+            let is_hidden_file = !s.eq(".") && s.starts_with('.');
             let is_node_module = s.eq("node_modules");
             !is_hidden_file & !is_node_module
         })
