@@ -35,13 +35,8 @@ fn main() -> Result<()> {
     let canonicalized_source_path = fs::canonicalize(&source_path)?;
     let affected_files = grep::find_affected_files(&canonicalized_source_path)?;
 
-    fs::rename(&source_path, &target_file)?;
+    move_file(&source_path, &target_file)?;
     let canonicalized_target_path = fs::canonicalize(&target_file)?;
-
-    let source_code = fs::read_to_string(&target_file)?;
-    let new_source_code = update_imports(source_code, &source_path, &target_file)?;
-
-    fs::write(target_file, new_source_code)?;
 
     for affected_file in affected_files.iter() {
         let affected_file = fs::canonicalize(affected_file)
@@ -59,5 +54,13 @@ fn main() -> Result<()> {
         fs::write(affected_file, updated_source_code)?;
     }
 
+    Ok(())
+}
+
+fn move_file(source_path: &PathBuf, target_file: &PathBuf) -> Result<()> {
+    fs::rename(&source_path, &target_file)?;
+    let source_code = fs::read_to_string(&target_file)?;
+    let new_source_code = update_imports(source_code, &source_path, &target_file)?;
+    fs::write(target_file, new_source_code)?;
     Ok(())
 }
