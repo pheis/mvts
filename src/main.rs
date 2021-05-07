@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-// use rayon::iter::ParallelIterator;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::env;
 use std::fs;
@@ -41,15 +40,14 @@ fn main() -> Result<()> {
     let full_target_path = path::join(&current_dir, &target_file)?;
 
     let source = source_path.clone();
-    let target = target_file.clone();
-    let handler = thread::spawn(move || match move_file(&source, &target) {
+    let handler = thread::spawn(move || match move_file(&source, &target_file) {
         Ok(_) => (),
         Err(err) => println!("{:?}", err),
     });
 
     let affected_files = grep::find_affected_files(&current_dir, &source_path)?;
 
-    &affected_files
+    affected_files
         .into_par_iter()
         .try_for_each(move |affected_file| {
             let affected_file = path::join(&current_dir, &affected_file)?;
