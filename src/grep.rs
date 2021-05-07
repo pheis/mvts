@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use walkdir::{DirEntry, WalkDir};
 
 use crate::import_string;
-use crate::path::normalize;
+use crate::path;
 
 fn is_ok_file(entry: &DirEntry) -> bool {
     entry
@@ -19,7 +19,7 @@ fn is_ok_file(entry: &DirEntry) -> bool {
 }
 
 pub fn find_affected_files(current_dir: &PathBuf, moved_file: &PathBuf) -> Result<Vec<PathBuf>> {
-    let full_moved_path = get_full_path(current_dir, moved_file)?;
+    let full_moved_path = path::join(current_dir, moved_file)?;
 
     let walker = WalkDir::new(".")
         .into_iter()
@@ -33,7 +33,7 @@ pub fn find_affected_files(current_dir: &PathBuf, moved_file: &PathBuf) -> Resul
         })
         .filter(|entry| {
             let full_path = current_dir.join(entry.path());
-            normalize(&full_path)
+            path::normalize(&full_path)
                 .map_err(|_| anyhow!("Failed to normalize path {:?}", entry.path()))
                 .and_then(|file_path| has_import_to_file(&file_path, &full_moved_path))
                 .unwrap_or(false)
@@ -43,7 +43,7 @@ pub fn find_affected_files(current_dir: &PathBuf, moved_file: &PathBuf) -> Resul
 
     for entry in walker {
         let full_entry_path = current_dir.join(entry.path());
-        let full_entry_path = normalize(&full_entry_path)?;
+        let full_entry_path = path::normalize(&full_entry_path)?;
 
         if full_entry_path.eq(&full_moved_path) {
             continue;
@@ -59,9 +59,4 @@ fn has_import_to_file(source_file: &PathBuf, imported_file: &PathBuf) -> Result<
     let import_string = import_string::from_paths(&source_file, &imported_file)?;
     let content = fs::read_to_string(source_file)?;
     Ok(content.contains(&import_string))
-}
-
-fn get_full_path(current_dir: &PathBuf, path: &PathBuf) -> Result<PathBuf> {
-    let full_path = current_dir.join(path);
-    normalize(&full_path)
 }

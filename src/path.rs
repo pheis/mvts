@@ -50,6 +50,11 @@ pub fn get_parent(path: &PathBuf) -> PathBuf {
     path
 }
 
+pub fn join(dir: &PathBuf, path: &PathBuf) -> Result<PathBuf> {
+    let full_path = dir.join(path);
+    normalize(&full_path)
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;

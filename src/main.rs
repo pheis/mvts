@@ -14,7 +14,6 @@ mod parser;
 mod path;
 
 use edit::{update_import, update_imports};
-use path::normalize;
 
 #[derive(StructOpt)]
 struct Cli {
@@ -38,8 +37,8 @@ fn main() -> Result<()> {
     }
 
     let current_dir = env::current_dir()?;
-    let full_source_path = get_full_path(&current_dir, &source_path)?;
-    let full_target_path = get_full_path(&current_dir, &target_file)?;
+    let full_source_path = path::join(&current_dir, &source_path)?;
+    let full_target_path = path::join(&current_dir, &target_file)?;
 
     let source = source_path.clone();
     let target = target_file.clone();
@@ -53,7 +52,7 @@ fn main() -> Result<()> {
     &affected_files
         .into_par_iter()
         .try_for_each(move |affected_file| {
-            let affected_file = get_full_path(&current_dir, &affected_file)?;
+            let affected_file = path::join(&current_dir, &affected_file)?;
 
             let affected_source_code = fs::read_to_string(&affected_file)
                 .map_err(|_| anyhow!("Could not find {:?}", affected_file))?;
@@ -71,11 +70,6 @@ fn main() -> Result<()> {
 
     handler.join().unwrap();
     Ok(())
-}
-
-fn get_full_path(current_dir: &PathBuf, path: &PathBuf) -> Result<PathBuf> {
-    let full_path = current_dir.join(path);
-    normalize(&full_path)
 }
 
 fn move_file(source_path: &PathBuf, target_file: &PathBuf) -> Result<()> {
