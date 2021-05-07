@@ -1,7 +1,10 @@
 use anyhow::{anyhow, Result};
+// use rayon::iter::ParallelIterator;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use std::env;
 use std::fs;
 use std::path::PathBuf;
+use std::thread;
 use structopt::StructOpt;
 
 mod edit;
@@ -35,30 +38,38 @@ fn main() -> Result<()> {
     }
 
     let current_dir = env::current_dir()?;
-
-    let affected_files = grep::find_affected_files(&current_dir, &source_path)?;
-
-    move_file(&source_path, &target_file)?;
-
     let full_source_path = get_full_path(&current_dir, &source_path)?;
     let full_target_path = get_full_path(&current_dir, &target_file)?;
 
-    for affected_file in affected_files.iter() {
-        let affected_file = get_full_path(&current_dir, affected_file)?;
+    let source = source_path.clone();
+    let target = target_file.clone();
+    let handler = thread::spawn(move || match move_file(&source, &target) {
+        Ok(_) => (),
+        Err(err) => println!("{:?}", err),
+    });
 
-        let affected_source_code = fs::read_to_string(&affected_file)
-            .map_err(|_| anyhow!("Could not find {:?}", affected_file))?;
+    let affected_files = grep::find_affected_files(&current_dir, &source_path)?;
 
-        let updated_source_code = update_import(
-            &affected_source_code,
-            &affected_file,
-            &full_source_path,
-            &full_target_path,
-        )?;
+    &affected_files
+        .into_par_iter()
+        .try_for_each(move |affected_file| {
+            let affected_file = get_full_path(&current_dir, &affected_file)?;
 
-        fs::write(affected_file, updated_source_code)?;
-    }
+            let affected_source_code = fs::read_to_string(&affected_file)
+                .map_err(|_| anyhow!("Could not find {:?}", affected_file))?;
 
+            let updated_source_code = update_import(
+                &affected_source_code,
+                &affected_file,
+                &full_source_path,
+                &full_target_path,
+            )?;
+
+            fs::write(&affected_file, updated_source_code)
+                .map_err(|_| anyhow!("Failed to write {:?}", affected_file))
+        })?;
+
+    handler.join().unwrap();
     Ok(())
 }
 
