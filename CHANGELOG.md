@@ -1,3 +1,6 @@
+# 0.3.0 (2021-05-07)
+- Parallelize
+
 # 0.2.2 (2021-05-07)
 - Fixed updating import that point to /index file
 
