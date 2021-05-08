@@ -29,3 +29,14 @@ $ cargo build --release
 $ ./target/release/mvts --version
 0.2.0
 ```
+
+## Features and missing features
+
+- [x] Handling relateive node import statements (no .ts/tsx suffix)
+- [x] Moving single ts/tsx file and updating it's imports
+- [x] Updatating affected files imports to moved file
+- [x] Parallel processing
+- [ ] Renaming folder containing multiple files
+- [ ] Handling require() and import functions()
+- [ ] Handling Deno imports (with .ts/tsx suffix)
+- [ ] Handling glob patters in argumentsts
