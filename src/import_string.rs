@@ -29,7 +29,7 @@ pub fn from_paths(file: &PathBuf, required_file: &PathBuf) -> Result<String> {
     from_relative_path(&rel_path)
 }
 
-fn to_node_import(import_sting: &str) -> String {
+pub fn to_node_import(import_sting: &str) -> String {
     let re = Regex::new(r"(^|/)index\.(jsx|js|tsx|ts)|\.\w+$").unwrap();
     re.replace_all(import_sting, "").into()
 }

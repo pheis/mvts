@@ -26,6 +26,21 @@ fn main() -> Result<()> {
         target_path,
     } = Cli::from_args();
 
+    let current_dir = env::current_dir()?;
+
+    if source_path.is_dir() {
+        println!("Can't handle dir moves yet");
+        Ok(())
+    } else {
+        rename_single_file(current_dir, source_path, target_path)
+    }
+}
+
+fn rename_single_file(
+    current_dir: PathBuf,
+    source_path: PathBuf,
+    target_path: PathBuf,
+) -> Result<()> {
     let mut target_file = target_path;
 
     if target_file.is_dir() {
@@ -33,7 +48,6 @@ fn main() -> Result<()> {
         target_file.push(file_name);
     }
 
-    let current_dir = env::current_dir()?;
     let full_source_path = path::join(&current_dir, &source_path)?;
     let full_target_path = path::join(&current_dir, &target_file)?;
 
@@ -43,18 +57,29 @@ fn main() -> Result<()> {
         Err(err) => println!("{:?}", err),
     });
 
-    let affected_files = grep::find_affected_files(&current_dir, &source_path)?;
+    let other_files: Vec<PathBuf> = grep::iter_files(&current_dir)
+        .filter(|path| !path.eq(&full_target_path) && !path.eq(&full_source_path))
+        .collect();
 
-    affected_files
+    other_files
         .into_par_iter()
         .try_for_each(move |affected_file| {
             let affected_file = path::join(&current_dir, &affected_file)?;
 
-            let affected_source_code = fs::read_to_string(&affected_file)
+            let source_code = fs::read_to_string(&affected_file)
                 .map_err(|_| anyhow!("Could not find {:?}", affected_file))?;
 
+            let import_string = import_string::from_paths(&affected_file, &full_source_path)?;
+            let import_string = import_string::to_node_import(&import_string);
+
+            let contains_import = source_code.contains(&import_string);
+
+            if !contains_import {
+                return Ok(());
+            }
+
             let updated_source_code = edit::move_required_file(
-                &affected_source_code,
+                &source_code,
                 &affected_file,
                 &full_source_path,
                 &full_target_path,
@@ -75,3 +100,5 @@ fn move_file(source_path: &PathBuf, target_file: &PathBuf) -> Result<()> {
     fs::write(target_file, new_source_code)?;
     Ok(())
 }
+
+// fn rename_dir(current_dir: PathBuf, source_path: PathBuf, target_path: PathBuf) {}
