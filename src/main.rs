@@ -1,11 +1,9 @@
 use anyhow::{anyhow, Result};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-// use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::thread;
-// use std::time::Instant;
 use structopt::StructOpt;
 
 mod edit;
