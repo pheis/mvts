@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::collections::HashMap;
+// use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::thread;
-use std::time::Instant;
+// use std::time::Instant;
 use structopt::StructOpt;
 
 mod edit;
@@ -117,49 +117,51 @@ fn rename_dir(current_dir: PathBuf, source_path: PathBuf, target_path: PathBuf) 
     let moved_files = moved_files?;
     let moved_files = &moved_files;
 
-    println!("Starting mega looop");
-    for (source_file, target_file) in moved_files {
-        let source_code = fs::read_to_string(&source_file)?;
+    moved_files
+        .into_par_iter()
+        .try_for_each(|(source_file, target_file)| -> Result<()> {
+            let source_code = fs::read_to_string(&source_file)
+                .map_err(|_| anyhow!("Failed to read {:?}", source_file));
+            let source_code = source_code?;
 
-        let new_source_code = edit::replace_imports(&source_file, &source_code, |import_string| {
-            let start = Instant::now();
-            let has_moved = moved_files.into_iter().find(|(moved_file, _)| {
-                import_string::is_import_from(&source_file, moved_file, &import_string)
-                    .unwrap_or(false)
-            });
-            let elapsed = start.elapsed();
-            println!("{:?}", elapsed);
+            let new_source_code =
+                edit::replace_imports(&source_file, &source_code, |import_string| {
+                    let has_moved = moved_files.into_iter().find(|(moved_file, _)| {
+                        import_string::is_import_from(&source_file, moved_file, &import_string)
+                            .unwrap_or(false)
+                    });
 
-            match has_moved {
-                Some((old_location, new_location)) => {
-                    let args = import_string::RequiredFileRename {
-                        source_file: &source_file,
-                        import_string,
-                        old_location: &old_location,
-                        new_location: &new_location,
-                    };
-                    let import_string = import_string::rename_required_file(&args)?;
-                    let args = import_string::SourceFileRename {
-                        import_string: &&import_string,
-                        old_location: &source_file,
-                        new_location: &target_file,
-                    };
-                    import_string::rename_source_file(&args)
-                }
-                None => {
-                    let args = import_string::SourceFileRename {
-                        import_string: &&import_string,
-                        old_location: &source_file,
-                        new_location: &target_file,
-                    };
-                    import_string::rename_source_file(&args)
-                }
-            }
+                    match has_moved {
+                        Some((old_location, new_location)) => {
+                            let args = import_string::RequiredFileRename {
+                                source_file: &source_file,
+                                import_string,
+                                old_location: &old_location,
+                                new_location: &new_location,
+                            };
+                            let import_string = import_string::rename_required_file(&args)?;
+                            let args = import_string::SourceFileRename {
+                                import_string: &&import_string,
+                                old_location: &source_file,
+                                new_location: &target_file,
+                            };
+                            import_string::rename_source_file(&args)
+                        }
+                        None => {
+                            let args = import_string::SourceFileRename {
+                                import_string: &&import_string,
+                                old_location: &source_file,
+                                new_location: &target_file,
+                            };
+                            import_string::rename_source_file(&args)
+                        }
+                    }
+                })?;
+            fs::write(source_file, new_source_code)
+                .map_err(|_| anyhow!("Failed to write {:?}", source_file))?;
+            Ok(())
         })?;
-        // fs::write(source_file, new_source_code)?;
-        // println!("{}", new_source_code)
-    }
-    // fs::rename(&source_path, &target_path)?;
+    fs::rename(&source_path, &target_path)?;
 
     // let other_files: Vec<PathBuf> = grep::iter_files(&current_dir)
     //     .filter(|file| {
