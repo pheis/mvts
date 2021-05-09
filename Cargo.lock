@@ -233,7 +233,6 @@ dependencies = [
  "ignore",
  "pathdiff",
  "rayon",
- "regex",
  "ropey",
  "structopt",
  "tree-sitter",

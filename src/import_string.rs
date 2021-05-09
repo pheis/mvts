@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Result};
-use regex::Regex;
 use std::path::PathBuf;
 
 use crate::path;
@@ -29,9 +28,21 @@ pub fn from_paths(file: &PathBuf, required_file: &PathBuf) -> Result<String> {
     from_relative_path(&rel_path)
 }
 
-pub fn to_node_import(import_sting: &str) -> String {
-    let re = Regex::new(r"(^|/)index\.(jsx|js|tsx|ts)|\.\w+$").unwrap();
-    re.replace_all(import_sting, "").into()
+pub fn to_node_import(import_sting: &str) -> &str {
+    import_sting
+        .strip_suffix("/index.ts")
+        .or_else(|| import_sting.strip_suffix("/index.tsx"))
+        .or_else(|| import_sting.strip_suffix("/index.js"))
+        .or_else(|| import_sting.strip_suffix("/index.jsx"))
+        .or_else(|| import_sting.strip_suffix("index.ts"))
+        .or_else(|| import_sting.strip_suffix("index.tsx"))
+        .or_else(|| import_sting.strip_suffix("index.js"))
+        .or_else(|| import_sting.strip_suffix("index.jsx"))
+        .or_else(|| import_sting.strip_suffix(".ts"))
+        .or_else(|| import_sting.strip_suffix(".tsx"))
+        .or_else(|| import_sting.strip_suffix(".js"))
+        .or_else(|| import_sting.strip_suffix(".jsx"))
+        .unwrap_or(import_sting)
 }
 
 pub fn is_import_from(
@@ -41,10 +52,13 @@ pub fn is_import_from(
 ) -> Result<bool> {
     let rel_string = from_paths(&source_file, &required_file)?;
     let wo_index = to_node_import(&rel_string);
-    let with_index = wo_index.clone() + "/index";
-    Ok(import_string.eq(&rel_string)
-        || import_string.eq(&with_index)
-        || import_string.eq(&wo_index))
+    let with_index = wo_index.to_owned() + "/index";
+
+    Ok(
+        import_string.eq(&rel_string)
+            || import_string.eq(wo_index)
+            || import_string.eq(&with_index),
+    )
 }
 
 pub struct SourceFileRename<'a> {
@@ -90,13 +104,41 @@ pub fn rename_required_file(
 
     Ok(match suffix {
         Some(_) => new_import_string,
-        None => to_node_import(&new_import_string),
+        None => to_node_import(&new_import_string).to_string(),
     })
 }
 
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+
+    macro_rules! to_node_import_tests{
+        ($($name:ident: $value:expr,)*) => {
+        $(
+            #[test]
+            fn $name() {
+                let (input, expected) = $value;
+
+
+                let result = super::to_node_import(input);
+                assert_eq!(result, expected);
+            }
+        )*
+        }
+    }
+
+    to_node_import_tests! {
+        to_node_import_test_00: ("./a/b.ts", "./a/b"),
+        to_node_import_test_01: ("./a/b.tsx", "./a/b"),
+        to_node_import_test_02: ("./a/b.js", "./a/b"),
+        to_node_import_test_03: ("./a/b.jsx", "./a/b"),
+        to_node_import_test_04: ("./a/b.svg", "./a/b.svg"),
+        to_node_import_test_05: ("./a/index.svg", "./a/index.svg"),
+
+        to_node_import_test_06: ("./a/index.ts", "./a"),
+        to_node_import_test_07: ("./a/b/index.jsx", "./a/b"),
+        to_node_import_test_08: ("../b/index.jsx", "../b"),
+    }
 
     macro_rules! rename_source_file_tests{
         ($($name:ident: $value:expr,)*) => {

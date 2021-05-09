@@ -46,6 +46,35 @@ where
     Ok(rope.to_string())
 }
 
+pub fn replace_imports<F>(source_file: &PathBuf, source_code: &str, replacer: F) -> Result<String>
+where
+    F: Fn(&String) -> Result<String>,
+{
+    let lang = infer_langauge_from_suffix(&source_file)?;
+    let mut import_finder = ImportFinder::new(&source_code, lang)?;
+    let mut rope = Rope::from_str(&source_code);
+
+    for text_slice in import_finder.find_imports() {
+        let (start_idx, end_idx) = text_slice.to_index_range(&rope);
+
+        let old_import = rope.slice(start_idx..end_idx).to_string();
+
+        if !old_import.starts_with('.') {
+            continue;
+        }
+
+        let new_import = replacer(&old_import)?;
+
+        if old_import.eq(&new_import) {
+            continue;
+        }
+
+        rope.remove(start_idx..end_idx);
+        rope.insert(start_idx, &new_import);
+    }
+    Ok(rope.to_string())
+}
+
 pub fn move_source_file(
     source_code: String,
     source_file: &PathBuf,
