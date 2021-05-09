@@ -1,4 +1,7 @@
-- handle imports with suffix (Deno imports, .svg etc.)
+# 0.4.0 (2021-05-09)
+- Implement folder renaming
+- Handle imports with suffix (Deno imports, .svg etc.)
+- Fixed unnecessary writes to disk
 
 # 0.3.0 (2021-05-07)
 - Parallelize
