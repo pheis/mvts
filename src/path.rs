@@ -80,5 +80,6 @@ mod tests {
         strips_2: ("a/b/./../c/d", "a/c/d"),
         strips_3: ("a/b/./../c/d/e/../f", "a/c/d/f"),
         strips_4: ("/a/b/./../c/d/e/../f", "/a/c/d/f"),
+        strips_5: ("/a/b/./../c/d/e/../f.svg", "/a/c/d/f.svg"),
     }
 }

@@ -46,32 +46,37 @@ where
     Ok(rope.to_string())
 }
 
-pub fn update_imports(
+pub fn move_source_file(
     source_code: String,
     source_file: &PathBuf,
     target_file: &PathBuf,
 ) -> Result<String> {
     let lang = infer_langauge_from_suffix(&source_file)?;
-    replace_rel_imports(&source_code, lang, |old_import| {
-        let path = import_string::to_path(&source_file, &old_import)?;
-        import_string::from_paths(&target_file, &path)
+    replace_rel_imports(&source_code, lang, |import_string| {
+        let args = import_string::SourceFileRename {
+            import_string,
+            old_location: source_file,
+            new_location: target_file,
+        };
+        import_string::rename_source_file(&args)
     })
 }
 
-pub fn update_import(
+pub fn move_required_file(
     source_code: &str,
     source_file: &PathBuf,
     old_import_location: &PathBuf,
     new_import_location: &PathBuf,
 ) -> Result<String> {
     let lang = infer_langauge_from_suffix(&source_file)?;
-    replace_rel_imports(&source_code, lang, |old_import| {
-        Ok(
-            match import_string::is_import_from(&source_file, &old_import_location, old_import)? {
-                false => old_import.clone(),
-                true => import_string::from_paths(&source_file, &new_import_location)?,
-            },
-        )
+    replace_rel_imports(&source_code, lang, |import_string| {
+        let args = import_string::RequiredFileRename {
+            source_file,
+            import_string,
+            old_location: old_import_location,
+            new_location: new_import_location,
+        };
+        import_string::rename_required_file(&args)
     })
 }
 
@@ -94,7 +99,7 @@ mod tests {
         let source: PathBuf = "/src/a/b/c/d/source.ts".into();
         let target: PathBuf = "/src/a/b/c/d/e/target.ts".into();
 
-        let new_source_code = super::update_imports(code, &source, &target)?;
+        let new_source_code = super::move_source_file(code, &source, &target)?;
 
         let new_import_0: String = "import some from '../../../some';".into();
         let new_import_1: String = "import other from '../../../other';".into();
@@ -118,7 +123,7 @@ mod tests {
         let source: PathBuf = "/src/a/b/c/d/source.ts".into();
         let target: PathBuf = "/src/a/target.ts".into();
 
-        let new_source_code = super::update_imports(code, &source, &target)?;
+        let new_source_code = super::move_source_file(code, &source, &target)?;
 
         let new_import_0: String = "import some from './b/some';".into();
         let new_import_1: String = "import other from './b/other';".into();

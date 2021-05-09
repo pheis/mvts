@@ -12,8 +12,6 @@ mod import_string;
 mod parser;
 mod path;
 
-use edit::{update_import, update_imports};
-
 #[derive(StructOpt)]
 struct Cli {
     #[structopt(parse(from_os_str))]
@@ -55,7 +53,7 @@ fn main() -> Result<()> {
             let affected_source_code = fs::read_to_string(&affected_file)
                 .map_err(|_| anyhow!("Could not find {:?}", affected_file))?;
 
-            let updated_source_code = update_import(
+            let updated_source_code = edit::move_required_file(
                 &affected_source_code,
                 &affected_file,
                 &full_source_path,
@@ -73,7 +71,7 @@ fn main() -> Result<()> {
 fn move_file(source_path: &PathBuf, target_file: &PathBuf) -> Result<()> {
     fs::rename(&source_path, &target_file)?;
     let source_code = fs::read_to_string(&target_file)?;
-    let new_source_code = update_imports(source_code, &source_path, &target_file)?;
+    let new_source_code = edit::move_source_file(source_code, &source_path, &target_file)?;
     fs::write(target_file, new_source_code)?;
     Ok(())
 }

@@ -38,5 +38,6 @@ $ ./target/release/mvts --version
 - [x] Parallel processing
 - [ ] Renaming folder containing multiple files
 - [ ] Handling require() and import functions()
-- [ ] Handling Deno imports (with .ts/tsx suffix)
+- [x] Handling Deno imports (with .ts/tsx suffix)
+- [x] Handling .svg etc imports
 - [ ] Handling glob patters in argumentsts

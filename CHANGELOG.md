@@ -1,3 +1,5 @@
+- handle imports with suffix (Deno imports, .svg etc.)
+
 # 0.3.0 (2021-05-07)
 - Parallelize
 
