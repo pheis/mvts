@@ -36,8 +36,9 @@ $ ./target/release/mvts --version
 - [x] Moving single ts/tsx file and updating it's imports
 - [x] Updatating affected files imports to moved file
 - [x] Parallel processing
-- [ ] Renaming folder containing multiple files
+- [x] Renaming folder containing multiple files
 - [ ] Handling require() and import functions()
 - [x] Handling Deno imports (with .ts/tsx suffix)
 - [x] Handling .svg etc imports
 - [ ] Handling glob patters in argumentsts
+- [ ] Finding root based on git, package.json etc patterns if feasible
