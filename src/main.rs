@@ -64,7 +64,7 @@ fn rename_single_file(
 
     other_files
         .into_par_iter()
-        .try_for_each(move |affected_file| {
+        .try_for_each(move |affected_file| -> Result<()> {
             let affected_file = path::join(&current_dir, &affected_file)?;
 
             let source_code = fs::read_to_string(&affected_file)
@@ -86,8 +86,12 @@ fn rename_single_file(
                 &full_target_path,
             )?;
 
-            fs::write(&affected_file, updated_source_code)
-                .map_err(|_| anyhow!("Failed to write {:?}", affected_file))
+            if !source_code.eq(&updated_source_code) {
+                fs::write(&affected_file, updated_source_code)
+                    .map_err(|_| anyhow!("Failed to write {:?}", affected_file))?
+            }
+
+            Ok(())
         })?;
 
     handler.join().unwrap();
@@ -109,20 +113,18 @@ fn rename_dir(current_dir: PathBuf, source_path: PathBuf, target_path: PathBuf) 
     let moved_files: Result<Vec<(PathBuf, PathBuf)>> = grep::iter_files(&full_source_path)
         .map(|file| {
             let rel_path = path::diff(&full_source_path, &file)?;
-            let new_file = path::join(&&full_target_path, &rel_path)?;
+            let new_file = path::join(&full_target_path, &rel_path)?;
             Ok((file, new_file))
         })
         .collect();
 
-    let moved_files = moved_files?;
-    let moved_files = &moved_files;
+    let moved_files = &moved_files?;
 
     moved_files
         .into_par_iter()
         .try_for_each(|(source_file, target_file)| -> Result<()> {
             let source_code = fs::read_to_string(&source_file)
-                .map_err(|_| anyhow!("Failed to read {:?}", source_file));
-            let source_code = source_code?;
+                .map_err(|_| anyhow!("Failed to read {:?}", source_file))?;
 
             let new_source_code =
                 edit::replace_imports(&source_file, &source_code, |import_string| {
@@ -157,49 +159,61 @@ fn rename_dir(current_dir: PathBuf, source_path: PathBuf, target_path: PathBuf) 
                         }
                     }
                 })?;
-            fs::write(source_file, new_source_code)
-                .map_err(|_| anyhow!("Failed to write {:?}", source_file))?;
+
+            if !source_code.eq(&new_source_code) {
+                fs::write(source_file, new_source_code)
+                    .map_err(|_| anyhow!("Failed to write {:?}", source_file))?;
+            }
+
             Ok(())
         })?;
-    fs::rename(&source_path, &target_path)?;
 
-    // let other_files: Vec<PathBuf> = grep::iter_files(&current_dir)
-    //     .filter(|file| {
-    //         moved_files
-    //             .clone()
-    //             .into_iter()
-    //             .find(|(moved_file, _)| file.eq(moved_file))
-    //             .is_none()
-    //     })
-    //     .collect();
+    let other_files: Vec<PathBuf> = grep::iter_files(&current_dir)
+        .filter(|path| {
+            moved_files
+                .into_iter()
+                .find(|(moved_path, _)| moved_path.eq(path))
+                .is_none()
+        })
+        .collect();
 
-    // other_files
-    //     .into_par_iter()
-    //     .try_for_each(move |affected_file| {
-    //         let affected_file = path::join(&current_dir, &affected_file)?;
+    other_files
+        .into_par_iter()
+        .try_for_each(|source_file| -> Result<()> {
+            let source_code = fs::read_to_string(&source_file)
+                .map_err(|_| anyhow!("Failed to read {:?}", source_file))?;
 
-    //         let source_code = fs::read_to_string(&affected_file)
-    //             .map_err(|_| anyhow!("Could not find {:?}", affected_file))?;
+            let new_source_code =
+                edit::replace_imports(&source_file, &source_code, |import_string| {
+                    let has_moved = moved_files.into_iter().find(|(moved_file, _)| {
+                        import_string::is_import_from(&source_file, moved_file, &import_string)
+                            .unwrap_or(false)
+                    });
 
-    //         let import_string = import_string::from_paths(&affected_file, &full_source_path)?;
-    //         let import_string = import_string::to_node_import(&import_string);
+                    match has_moved {
+                        Some((old_location, new_location)) => {
+                            let args = import_string::RequiredFileRename {
+                                source_file: &source_file,
+                                import_string,
+                                old_location: &old_location,
+                                new_location: &new_location,
+                            };
+                            import_string::rename_required_file(&args)
+                        }
+                        None => Ok(import_string.clone()),
+                    }
+                })?;
 
-    //         let contains_import = source_code.contains(&import_string);
+            if !source_code.eq(&new_source_code) {
+                fs::write(&source_file, new_source_code)
+                    .map_err(|_| anyhow!("Failed to write {:?}", source_file))?;
+            }
 
-    //         if !contains_import {
-    //             return Ok(());
-    //         }
+            Ok(())
+        })?;
 
-    //         let updated_source_code = edit::move_required_file(
-    //             &source_code,
-    //             &affected_file,
-    //             &full_source_path,
-    //             &full_target_path,
-    //         )?;
-
-    //         fs::write(&affected_file, updated_source_code)
-    //             .map_err(|_| anyhow!("Failed to write {:?}", affected_file))
-    //     })?;
+    fs::rename(&source_path, &target_path)
+        .map_err(|_| anyhow!("Failed to rename {:?} to {:?}", &source_path, &target_path,))?;
 
     Ok(())
 }
