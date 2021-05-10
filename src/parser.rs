@@ -3,7 +3,7 @@ use ropey::Rope;
 use tree_sitter::{Language, Parser, Query, QueryCursor, Tree};
 use tree_sitter_typescript::{language_tsx, language_typescript};
 
-const QUERY: &str = "(import_statement (string) @import)";
+const QUERY: &str = "(import_statement (string) @import)(export_statement (string) @import)";
 
 pub enum Lang {
     TypeScript,
