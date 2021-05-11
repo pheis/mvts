@@ -39,8 +39,8 @@ $ ./target/release/mvts --version
 - [x] Renaming folder containing multiple files
 - [x] Handling Deno imports (with .ts/tsx suffix)
 - [x] Handling .svg etc imports
-- [ ] Handling glob patters in argumentsts
-- [ ] Finding root based on git, package.json etc patterns if feasible
-- [ ] export * statements
+- [x] export * statements
 - [ ] require ( ) functions
 - [ ] import ( ) functions
+- [ ] Handling glob patters in argumentsts
+- [ ] Finding root based on git, package.json etc patterns if feasible
