@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use ropey::Rope;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -27,12 +28,34 @@ fn main() -> Result<()> {
     } = Cli::from_args();
 
     let current_dir = env::current_dir()?;
+    let full_source_path = path::join(&current_dir, &source_path)?;
 
-    if source_path.is_dir() {
-        rename_dir(current_dir, source_path, target_path)
-    } else {
-        rename_single_file(current_dir, source_path, target_path)
-    }
+    let v: Result<Vec<_>> = grep::iter_files(&full_source_path)
+        .map(|file_path| {
+            let source_code = fs::read_to_string(&file_path)?;
+            Ok((file_path, source_code))
+        })
+        .collect();
+
+    let v = v?;
+
+    v.into_par_iter()
+        .try_for_each(|(file_path, source_code)| -> Result<()> {
+            let mut lols = parser::ImportFinder::new(&source_code, &file_path)?;
+
+            lols.find_imports().for_each(|lol_wut| {
+                // println!("{:?}", lol_wut);
+            });
+
+            Ok(())
+        })?;
+
+    // if source_path.is_dir() {
+    //     rename_dir(current_dir, source_path, target_path)
+    // } else {
+    //     rename_single_file(current_dir, source_path, target_path)
+    // }
+    Ok(())
 }
 
 fn rename_single_file(

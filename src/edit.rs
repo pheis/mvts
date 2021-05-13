@@ -3,26 +3,13 @@ use ropey::Rope;
 use std::path::PathBuf;
 
 use crate::import_string;
-use crate::parser::{ImportFinder, Lang};
+use crate::parser::ImportFinder;
 
-fn infer_langauge_from_suffix(file_name: &PathBuf) -> Result<Lang> {
-    let suffix = file_name
-        .extension()
-        .and_then(|os_str| os_str.to_str())
-        .ok_or_else(|| anyhow!("Missing suffix on file"))?;
-
-    match suffix {
-        "ts" => Ok(Lang::TypeScript),
-        "tsx" => Ok(Lang::TypeScriptTsx),
-        suffix => Err(anyhow!("{:?} files are not supported", suffix)),
-    }
-}
-
-fn replace_rel_imports<F>(source_code: &str, lang: Lang, replacer: F) -> Result<String>
+fn replace_rel_imports<F>(source_code: &str, path: &PathBuf, replacer: F) -> Result<String>
 where
     F: Fn(&String) -> Result<String>,
 {
-    let mut import_finder = ImportFinder::new(&source_code, lang)?;
+    let mut import_finder = ImportFinder::new(&source_code, path)?;
     let mut rope = Rope::from_str(&source_code);
 
     for text_slice in import_finder.find_imports() {
@@ -50,8 +37,7 @@ pub fn replace_imports<F>(source_file: &PathBuf, source_code: &str, replacer: F)
 where
     F: Fn(&String) -> Result<String>,
 {
-    let lang = infer_langauge_from_suffix(&source_file)?;
-    let mut import_finder = ImportFinder::new(&source_code, lang)?;
+    let mut import_finder = ImportFinder::new(&source_code, source_file)?;
     let mut rope = Rope::from_str(&source_code);
 
     for text_slice in import_finder.find_imports() {
@@ -80,8 +66,7 @@ pub fn move_source_file(
     source_file: &PathBuf,
     target_file: &PathBuf,
 ) -> Result<String> {
-    let lang = infer_langauge_from_suffix(&source_file)?;
-    replace_rel_imports(&source_code, lang, |import_string| {
+    replace_rel_imports(&source_code, source_file, |import_string| {
         let args = import_string::SourceFileRename {
             import_string,
             old_location: source_file,
@@ -97,8 +82,7 @@ pub fn move_required_file(
     old_import_location: &PathBuf,
     new_import_location: &PathBuf,
 ) -> Result<String> {
-    let lang = infer_langauge_from_suffix(&source_file)?;
-    replace_rel_imports(&source_code, lang, |import_string| {
+    replace_rel_imports(&source_code, source_file, |import_string| {
         let args = import_string::RequiredFileRename {
             source_file,
             import_string,

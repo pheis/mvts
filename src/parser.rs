@@ -1,22 +1,25 @@
 use anyhow::{anyhow, Result};
 use ropey::Rope;
+use std::path::PathBuf;
 use tree_sitter::{Language, Parser, Query, QueryCursor, Tree};
 use tree_sitter_typescript::{language_tsx, language_typescript};
 
 const QUERY: &str = "(import_statement (string) @import)(export_statement (string) @import)";
 
-pub enum Lang {
-    TypeScript,
-    TypeScriptTsx,
-}
+fn infer_langauge(file_name: &PathBuf) -> Result<Language> {
+    let suffix = file_name
+        .extension()
+        .and_then(|os_str| os_str.to_str())
+        .ok_or_else(|| anyhow!("Missing suffix on file"))?;
 
-fn to_language(language: &Lang) -> Language {
-    match language {
-        Lang::TypeScript => language_typescript(),
-        Lang::TypeScriptTsx => language_tsx(),
+    match suffix {
+        "ts" => Ok(language_typescript()),
+        "tsx" => Ok(language_tsx()),
+        suffix => Err(anyhow!("{:?} files are not supported", suffix)),
     }
 }
 
+#[derive(Debug)]
 pub struct TextSlice {
     start_row: usize,
     start_col: usize,
@@ -39,8 +42,8 @@ pub struct ImportFinder {
 }
 
 impl ImportFinder {
-    pub fn new(source_code: &str, lang: Lang) -> Result<Self> {
-        let language = to_language(&lang);
+    pub fn new(source_code: &str, file_path: &PathBuf) -> Result<Self> {
+        let language = infer_langauge(file_path)?;
 
         let tree = parse_treesitter_tree(source_code, language)?;
         let query = Query::new(language, &QUERY).unwrap();
