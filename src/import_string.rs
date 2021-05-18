@@ -108,6 +108,14 @@ pub fn rename_required_file(
     })
 }
 
+pub fn update_import(
+    file_path: &PathBuf,
+    import_string: &str,
+    source_path: &PathBuf,
+    target_path: &PathBuf,
+) -> String {
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;

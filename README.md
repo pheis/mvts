@@ -40,6 +40,7 @@ $ ./target/release/mvts --version
 - [x] Handling Deno imports (with .ts/tsx suffix)
 - [x] Handling .svg etc imports
 - [x] export * statements
+- [ ] Create folders if target paths need new folders
 - [ ] require ( ) functions
 - [ ] import ( ) functions
 - [ ] Handling glob patters in argumentsts

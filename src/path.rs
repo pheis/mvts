@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Result};
 use pathdiff::diff_paths;
-use std::path::{Component, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::vec;
 
 pub fn normalize(path: &PathBuf) -> Result<PathBuf> {
@@ -55,9 +55,52 @@ pub fn join(dir: &PathBuf, path: &PathBuf) -> Result<PathBuf> {
     normalize(&full_path)
 }
 
+pub fn move_path(
+    file_path: &Path,
+    source_path: &Path,
+    target_path: &Path,
+) -> Result<Option<PathBuf>> {
+    match file_path.starts_with(source_path) {
+        false => Ok(None),
+        true => {
+            let suffix = file_path.strip_prefix(source_path)?;
+            Ok(Some(target_path.join(suffix)))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+
+    macro_rules! move_path_tests {
+        ($($name:ident: $value:expr,)*) => {
+        $(
+            #[test]
+            fn $name() {
+                let (file, source, target, expected) = $value;
+                let file: PathBuf = file.into();
+                let source: PathBuf = source.into();
+                let target: PathBuf = target.into();
+
+                let expected: Option<PathBuf> = expected.map(|s: &str| s.into());
+
+
+                let result = super::move_path(&file, &source, &target).unwrap();
+                assert_eq!(result, expected);
+            }
+        )*
+        }
+    }
+
+    move_path_tests! {
+        move_0: ("/a/b/c", "/a/b", "/a/z", Some("/a/z/c")),
+        move_1: ("a/b/c", "a/b", "a/z", Some("a/z/c")),
+        move_2: ("x/b/c", "a/b", "a/z", None),
+        move_3: ("a/b/c/d", "a", "z", Some("z/b/c/d")),
+        move_4: ("src/some/juuh.ts", "src/other/juuh.ts", "src/other/elikkas.ts", None),
+        move_5: ("src/some/juuh.ts", "src/some", "src/other", Some("src/other/juuh.ts")),
+    }
 
     macro_rules! normalize_path_tests {
         ($($name:ident: $value:expr,)*) => {
