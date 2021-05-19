@@ -44,3 +44,6 @@ $ ./target/release/mvts --version
 - [ ] import ( ) functions
 - [ ] Handling glob patters in argumentsts
 - [ ] Finding root based on git, package.json etc patterns if feasible
+- [ ] handling absolute paths
+- [ ] Move single or multiple non-ts files and update imports to them
+- [ ] handling path shortcuts defined in tsconfig.json
