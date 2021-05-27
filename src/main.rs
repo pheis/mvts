@@ -41,10 +41,6 @@ fn main() -> Result<()> {
 
     let current_dir = std::env::current_dir()?;
 
-    // FIX: Handle errors here!
-    let target_path_arg: PathBuf = matches.value_of(TARGET_ARG).unwrap().into();
-    let target_path_arg = current_dir.join(target_path_arg);
-
     let src_path_args: Result<Vec<PathBuf>> = matches
         .values_of(SRC_ARG)
         .unwrap()
@@ -54,8 +50,21 @@ fn main() -> Result<()> {
                 .map_err(|_| anyhow!("Can't find file {:?}", &rel_path))
         })
         .collect();
-
     let src_path_args = src_path_args?;
+
+    // FIX: Handle errors here!
+    let target_path_arg: PathBuf = matches.value_of(TARGET_ARG).unwrap().into();
+    let target_path_arg = current_dir.join(target_path_arg);
+
+    if target_path_arg.is_file() {
+        panic!("I Don't want to overwrite existing file.");
+    }
+
+    if src_path_args.len() > 1 {
+        if !target_path_arg.exists() {
+            fs::create_dir_all(target_path_arg.clone())?;
+        }
+    }
 
     let tsconfig_file = tsconfig::find_ts_config(&current_dir);
 
@@ -72,7 +81,8 @@ fn main() -> Result<()> {
         .and_then(|tsconfig_file| {
             tsconfig_file
                 .parent()
-                .map(|root_path| root_path.join("src"))
+                .map(|root_path| root_path.to_path_buf())
+            // .map(|root_path| root_path.join("src"))
         })
         .unwrap_or(current_dir);
 
@@ -117,11 +127,11 @@ fn main() -> Result<()> {
 
     let project_files = project_files?;
 
-    println!("{}", project_files.len());
-
-    for (a, (b, _)) in project_files.into_iter() {
+    for (a, (b, _)) in project_files.iter() {
         println!("{:?}, {:?}", a, b);
     }
+
+    println!("{}", project_files.len());
 
     // let lol = matches.source_files;
 
