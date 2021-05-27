@@ -38,6 +38,10 @@ fn main() -> Result<()> {
         })
         .collect();
 
+    let ts_path = grep::find_ts_config(&current_dir);
+
+    println!("{:?}", ts_path);
+
     // let edited = v
     //     .into_par_iter()
     //     .filter_map(|(file_path, source_code)| {
