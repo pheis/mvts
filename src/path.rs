@@ -55,16 +55,12 @@ pub fn join(dir: &PathBuf, path: &PathBuf) -> Result<PathBuf> {
     normalize(&full_path)
 }
 
-pub fn move_path(
-    file_path: &Path,
-    source_path: &Path,
-    target_path: &Path,
-) -> Result<Option<PathBuf>> {
+pub fn move_path(file_path: &Path, source_path: &Path, target_path: &Path) -> Option<PathBuf> {
     match file_path.starts_with(source_path) {
-        false => Ok(None),
+        false => None,
         true => {
-            let suffix = file_path.strip_prefix(source_path)?;
-            Ok(Some(target_path.join(suffix)))
+            let suffix = file_path.strip_prefix(source_path).ok()?;
+            Some(target_path.join(suffix))
         }
     }
 }
@@ -86,7 +82,7 @@ mod tests {
                 let expected: Option<PathBuf> = expected.map(|s: &str| s.into());
 
 
-                let result = super::move_path(&file, &source, &target).unwrap();
+                let result = super::move_path(&file, &source, &target);
                 assert_eq!(result, expected);
             }
         )*

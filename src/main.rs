@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::{crate_authors, crate_description, crate_version, App, Arg};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use ropey::Rope;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
@@ -15,33 +16,46 @@ mod parser;
 mod path;
 mod tsconfig;
 
+const SRC_ARG: &str = "source";
+const TARGET_ARG: &str = "target";
+
 fn main() -> Result<()> {
     let matches = App::new("mvts")
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
         .arg(
-            Arg::new("source")
+            Arg::new(SRC_ARG)
                 .about("source path")
                 .index(1)
                 .multiple(true)
                 .required(true),
         )
         .arg(
-            Arg::new("target")
+            Arg::new(TARGET_ARG)
                 .about("target path")
                 .index(2)
                 .required(true),
         )
         .get_matches();
 
-    let target = matches.value_of("target").unwrap();
-
-    for source in matches.values_of("source").unwrap() {
-        println!("{:?} --> {:?}", &source, &target);
-    }
-
     let current_dir = std::env::current_dir()?;
+
+    // FIX: Handle errors here!
+    let target_path_arg: PathBuf = matches.value_of(TARGET_ARG).unwrap().into();
+    let target_path_arg = current_dir.join(target_path_arg);
+
+    let src_path_args: Result<Vec<PathBuf>> = matches
+        .values_of(SRC_ARG)
+        .unwrap()
+        .map(|path_str| path_str.into())
+        .map(|rel_path: PathBuf| {
+            fs::canonicalize(rel_path.clone())
+                .map_err(|_| anyhow!("Can't find file {:?}", &rel_path))
+        })
+        .collect();
+
+    let src_path_args = src_path_args?;
 
     let tsconfig_file = tsconfig::find_ts_config(&current_dir);
 
@@ -62,16 +76,52 @@ fn main() -> Result<()> {
         })
         .unwrap_or(current_dir);
 
-    let project_files: Result<Vec<(PathBuf, String)>> = grep::iter_files(&project_root)
-        .map(|file_path| {
-            let source_code = fs::read_to_string(&file_path)?;
-            Ok((file_path, source_code))
+    println!("{:?}", target_path_arg);
+    let target_path_arg = path::diff(&project_root, &target_path_arg)?;
+
+    println!("{:?}", src_path_args);
+
+    let src_path_args: Result<Vec<PathBuf>> = src_path_args
+        .into_iter()
+        .map(|source_path| {
+            println!("{:?}", source_path);
+            path::diff(&project_root, &source_path)
         })
         .collect();
+
+    let src_path_args = src_path_args?;
+
+    // TODO FIX:
+    // project files are full paths
+    // args are partial paths,
+    // make them eq.
+    // IMO best make them all to be files from src/
+
+    let project_files: Result<HashMap<PathBuf, (PathBuf, String)>> =
+        grep::iter_files(&project_root)
+            .map(|file_path| {
+                let source_code = fs::read_to_string(&file_path)?;
+
+                let file_path = path::diff(&project_root, &file_path)?;
+
+                let moved_file_path = src_path_args
+                    .iter()
+                    .find_map(|moved_path| {
+                        path::move_path(&file_path, &moved_path, &target_path_arg)
+                    })
+                    .unwrap_or_else(|| file_path.clone());
+
+                Ok((file_path, (moved_file_path, source_code)))
+            })
+            .collect();
 
     let project_files = project_files?;
 
     println!("{}", project_files.len());
+
+    for (a, (b, _)) in project_files.into_iter() {
+        println!("{:?}, {:?}", a, b);
+    }
 
     // let lol = matches.source_files;
 
