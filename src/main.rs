@@ -10,6 +10,7 @@ use structopt::StructOpt;
 mod edit;
 mod grep;
 mod import_string;
+mod import_updater;
 mod parser;
 mod path;
 
@@ -30,23 +31,23 @@ fn main() -> Result<()> {
     let current_dir = env::current_dir()?;
     let full_source_path = path::join(&current_dir, &source_path)?;
 
-    let v: Vec<(PathBuf, String)> = grep::iter_files(&full_source_path)
+    let v: Result<Vec<(PathBuf, String)>> = grep::iter_files(&full_source_path)
         .map(|file_path| {
             let source_code = fs::read_to_string(&file_path)?;
             Ok((file_path, source_code))
         })
-        .collect()?;
-
-    let edited = v
-        .into_par_iter()
-        .filter_map(|(file_path, source_code)| {
-            match path::move_path(&file_path, &full_source_path, &full_target_path) {
-                Some(new_path) => (),
-                None => (),
-            }
-            // parser::replace_imports(&file_path, &source_code, |str| Ok(str.clone())).unwrap_or(None)
-        })
         .collect();
+
+    // let edited = v
+    //     .into_par_iter()
+    //     .filter_map(|(file_path, source_code)| {
+    //         match path::move_path(&file_path, &full_source_path, &full_target_path) {
+    //             Some(new_path) => (),
+    //             None => (),
+    //         }
+    //         // parser::replace_imports(&file_path, &source_code, |str| Ok(str.clone())).unwrap_or(None)
+    //     })
+    //     .collect();
 
     // if source_path.is_dir() {
     //     rename_dir(current_dir, source_path, target_path)

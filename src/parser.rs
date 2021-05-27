@@ -4,7 +4,16 @@ use std::path::PathBuf;
 use tree_sitter::{Language, Parser, Query, QueryCursor, Tree};
 use tree_sitter_typescript::{language_tsx, language_typescript};
 
-const QUERY: &str = "(import_statement (string) @import)(export_statement (string) @import)";
+const QUERY: &str = r###"
+(import_statement (string) @import_string)
+(export_statement (string) @import_string)
+(call_expression
+   (import)
+   (arguments (string) @import_string)
+)
+"###;
+
+// (call_expression (identifier) @constant (#match? @constant "require") (arguments (string) @import))
 
 fn infer_langauge(file_name: &PathBuf) -> Result<Language> {
     let suffix = file_name
@@ -61,6 +70,7 @@ impl ImportFinder {
             .matches(&self.query, self.tree.root_node(), |_| "")
             .into_iter()
             .flat_map(|qm| qm.captures.iter())
+            // .filter(|query_capture| query_capture.index == 0)
             .map(|query_capture| query_capture.node)
             .map(|node| {
                 let start_point = node.start_position();
@@ -100,10 +110,6 @@ where
 
         let old_import = rope.slice(start_idx..end_idx).to_string();
 
-        if !old_import.starts_with('.') {
-            continue;
-        }
-
         let new_import = replacer(&old_import)?;
 
         if old_import.eq(&new_import) {
@@ -118,6 +124,110 @@ where
     match has_mutated {
         true => Ok(Some(rope)),
         false => Ok(None),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+    use std::path::PathBuf;
+
+    #[test]
+    fn it_replaces_imports() -> Result<()> {
+        let code: String = r#"
+            import some from '../../some';
+            import other from '../../other';
+
+            const foo = require('../foo');
+
+            function main() {
+                console.log("hullo world");
+            }
+            "#
+        .into();
+
+        let source: PathBuf = "/src/a/b/c/d/source.ts".into();
+
+        let new_source_code = super::replace_imports(&source, &code, |_| Ok("lol".into()))?
+            .unwrap()
+            .to_string();
+
+        let new_import_0: String = "import some from 'lol';".into();
+        let new_import_1: String = "import other from 'lol';".into();
+        // let new_import_2: String = "const foo = require('lol');".into();
+
+        assert!(new_source_code.contains(&new_import_0));
+        assert!(new_source_code.contains(&new_import_1));
+        // assert!(new_source_code.contains(&new_import_2));
+        Ok(())
+    }
+
+    // #[test]
+    // fn it_replaces_require() -> Result<()> {
+    //     let code: String = "const foo = require('../asdf')".into();
+
+    //     let source: PathBuf = "/src/a/b/c/d/source.ts".into();
+
+    //     let new_source_code = super::replace_imports(&source, &code, |_| Ok("lol".into()))?
+    //         .unwrap()
+    //         .to_string();
+
+    //     assert_eq!(new_source_code, "const foo = require('lol')");
+    //     Ok(())
+    // }
+
+    // #[test]
+    // fn it_finds_require() -> Result<()> {
+    //     let code: String = "const foo = require('../asdf');".into();
+
+    //     let source: PathBuf = "/src/a/b/c/d/source.ts".into();
+
+    //     let mut finder = super::ImportFinder::new(&code, &source)?;
+
+    //     let matches: Vec<_> = finder.find_imports().collect();
+
+    //     assert_eq!(matches.len(), 1);
+    //     Ok(())
+    // }
+
+    #[test]
+    fn it_replaces_export() -> Result<()> {
+        let code: String = "export * from './lolwut'".into();
+
+        let source: PathBuf = "/src/a/b/c/d/source.ts".into();
+
+        let new_source_code = super::replace_imports(&source, &code, |_| Ok("lol".into()))?
+            .unwrap()
+            .to_string();
+
+        assert_eq!(new_source_code, "export * from 'lol'");
+        Ok(())
+    }
+
+    #[test]
+    fn it_replaces_import_call() -> Result<()> {
+        let code: String = "const asdf = import('./lolwut')".into();
+
+        let source: PathBuf = "/src/a/b/c/d/source.ts".into();
+
+        let new_source_code = super::replace_imports(&source, &code, |_| Ok("lol".into()))?
+            .unwrap()
+            .to_string();
+
+        assert_eq!(new_source_code, "const asdf = import('lol')");
+        Ok(())
+    }
+
+    #[test]
+    fn it_does_not_replace_random_call() -> Result<()> {
+        let code: String = "const asdf = random('./lolwut')".into();
+
+        let source: PathBuf = "/src/a/b/c/d/source.ts".into();
+
+        let new_source_code = super::replace_imports(&source, &code, |_| Ok("lol".into()))?;
+
+        assert_eq!(new_source_code, None);
+        Ok(())
     }
 }
 
