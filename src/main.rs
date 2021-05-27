@@ -13,6 +13,7 @@ mod import_string;
 mod import_updater;
 mod parser;
 mod path;
+mod tsconfig;
 
 #[derive(StructOpt)]
 struct Cli {
@@ -38,9 +39,10 @@ fn main() -> Result<()> {
         })
         .collect();
 
-    let ts_path = grep::find_ts_config(&current_dir);
+    let paths = tsconfig::read_ts_config(&current_dir);
+    println!("{:?}", paths);
 
-    println!("{:?}", ts_path);
+    // println!("{:?}", ts_path);
 
     // let edited = v
     //     .into_par_iter()
