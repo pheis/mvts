@@ -1,11 +1,11 @@
 use anyhow::{anyhow, Result};
+use clap::{crate_authors, crate_description, crate_version, App, Arg};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use ropey::Rope;
 use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::thread;
-use structopt::StructOpt;
 
 mod edit;
 mod grep;
@@ -15,32 +15,78 @@ mod parser;
 mod path;
 mod tsconfig;
 
-#[derive(StructOpt)]
-struct Cli {
-    #[structopt(parse(from_os_str))]
-    source_path: PathBuf,
-    #[structopt(parse(from_os_str))]
-    target_path: PathBuf,
-}
-
 fn main() -> Result<()> {
-    let Cli {
-        source_path,
-        target_path,
-    } = Cli::from_args();
+    let matches = App::new("mvts")
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about(crate_description!())
+        .arg(
+            Arg::new("source")
+                .about("source path")
+                .index(1)
+                .multiple(true)
+                .required(true),
+        )
+        .arg(
+            Arg::new("target")
+                .about("target path")
+                .index(2)
+                .required(true),
+        )
+        .get_matches();
 
-    let current_dir = env::current_dir()?;
-    let full_source_path = path::join(&current_dir, &source_path)?;
+    let target = matches.value_of("target").unwrap();
 
-    let v: Result<Vec<(PathBuf, String)>> = grep::iter_files(&full_source_path)
+    for source in matches.values_of("source").unwrap() {
+        println!("{:?} --> {:?}", &source, &target);
+    }
+
+    let current_dir = std::env::current_dir()?;
+
+    let tsconfig_file = tsconfig::find_ts_config(&current_dir);
+
+    if tsconfig_file.is_none() {
+        println!("Could not find tsconfig.json");
+    }
+
+    let path_map = tsconfig_file
+        .clone()
+        .and_then(|tsconfig_file| tsconfig::get_path_map_from_ts_config(&tsconfig_file));
+
+    // NB: Hard coded to src, this can be extracted from tsconfig_file
+    let project_root = tsconfig_file
+        .and_then(|tsconfig_file| {
+            tsconfig_file
+                .parent()
+                .map(|root_path| root_path.join("src"))
+        })
+        .unwrap_or(current_dir);
+
+    let project_files: Result<Vec<(PathBuf, String)>> = grep::iter_files(&project_root)
         .map(|file_path| {
             let source_code = fs::read_to_string(&file_path)?;
             Ok((file_path, source_code))
         })
         .collect();
 
-    let paths = tsconfig::read_ts_config(&current_dir);
-    println!("{:?}", paths);
+    let project_files = project_files?;
+
+    println!("{}", project_files.len());
+
+    // let lol = matches.source_files;
+
+    // let current_dir = env::current_dir()?;
+    // let full_source_path = path::join(&current_dir, &source_path)?;
+
+    // let v: Result<Vec<(PathBuf, String)>> = grep::iter_files(&full_source_path)
+    //     .map(|file_path| {
+    //         let source_code = fs::read_to_string(&file_path)?;
+    //         Ok((file_path, source_code))
+    //     })
+    //     .collect();
+
+    // let paths = tsconfig::read_ts_config(&current_dir);
+    // println!("{:?}", paths);
 
     // println!("{:?}", ts_path);
 

@@ -3,11 +3,12 @@ use std::fs;
 use std::path;
 
 use serde::{Deserialize, Serialize};
-// use serde_json::Result;
+
+pub type PathMap = collections::HashMap<String, Vec<String>>;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct CompilerOptions {
-    paths: Option<collections::HashMap<String, Vec<String>>>,
+    paths: Option<PathMap>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -41,29 +42,19 @@ pub fn find_ts_config(current_dir: &path::Path) -> Option<path::PathBuf> {
         })
 }
 
-fn get_paths_from_config(path: &path::Path) -> Option<collections::HashMap<String, String>> {
+pub fn get_path_map_from_ts_config(path: &path::Path) -> Option<PathMap> {
     let config = fs::read_to_string(path).ok()?;
-    println!("{:?}", config);
     let TSConfig {
         extends,
         compiler_options,
     } = serde_json::from_str(&config).ok()?;
-
-    println!("{:?}", path);
-
-    println!("{:?}", compiler_options);
 
     match (compiler_options.paths, extends) {
         (None, None) => None,
         (Some(paths), _) => Some(paths),
         (None, Some(another_config_file)) => {
             let another_config_file = path.parent()?.join(another_config_file);
-            get_paths_from_config(&another_config_file)
+            get_path_map_from_ts_config(&another_config_file)
         }
     }
-}
-
-pub fn read_ts_config(current_dir: &path::Path) -> Option<collections::HashMap<String, String>> {
-    let ts_config_file = find_ts_config(current_dir)?;
-    get_paths_from_config(&ts_config_file)
 }
